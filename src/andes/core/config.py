@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from: str = "assistant@andes.travel"
 
-    payments_enabled: bool = False
+    wompi_mode: Literal["fake", "sandbox"] = "fake"
     wompi_public_key: str | None = None
     wompi_private_key: str | None = None
     wompi_integrity_secret: str | None = None
