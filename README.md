@@ -13,7 +13,7 @@ human advisor with full context when needed.
 Everything runs **locally and for free**: a local LLM (Ollama), local embeddings,
 PostgreSQL + pgvector, and open-source observability. External providers (WhatsApp,
 telephony, payments) are wrapped by adapters with working mocks, so the entire test suite
-runs offline.
+runs offline. The current implementation stands at **v4.73**.
 
 ---
 
