@@ -93,14 +93,18 @@ class AsyncProfileRepository:
         self._session = session
 
     async def upsert(self, profile: TravelerProfile) -> None:
-        exists = await self._session.execute(
+        result = await self._session.execute(
             select(ProfileRow).where(ProfileRow.traveler_id == profile.traveler_id)
         )
-        if exists.scalar_one_or_none():
+        existing_row = result.scalar_one_or_none()
+        if existing_row:
             await self._session.execute(
                 update(ProfileRow)
                 .where(ProfileRow.traveler_id == profile.traveler_id)
-                .values(attributes=profile.attributes, updated_at=_utcnow())
+                .values(
+                    attributes={**existing_row.attributes, **profile.attributes},
+                    updated_at=_utcnow(),
+                )
             )
         else:
             row = ProfileRow(
