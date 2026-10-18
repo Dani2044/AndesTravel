@@ -3,7 +3,7 @@ name = "andes-travel"
 version = "0.1.0"
 description = "Omnichannel travel assistant with persistent memory, built on open-source agents (LangGraph)."
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.15,<3.16"
 license = { text = "Apache-2.0" }
 authors = [{ name = "AndesTravel contributors" }]
 dependencies = [
@@ -24,15 +24,15 @@ dependencies = [
 
 [project.optional-dependencies]
 llm = ["langchain-ollama>=0.2"]
-embeddings = ["sentence-transformers>=3.0"]
+embeddings = ["numpy>=1.26"]
 observability = [
     "langfuse>=2.44",
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-otlp>=1.25",
 ]
-voice = ["faster-whisper>=1.0", "piper-tts>=1.2"]
-all = ["andes-travel[llm,embeddings,observability,voice]"]
+voice = []  # optional voice deps omitted until cp315 wheels are available
+all = ["andes-travel[llm,embeddings,observability]"]
 
 [dependency-groups]
 dev = [
