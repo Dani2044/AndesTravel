@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
           python-version: "3.15"
       - run: uv sync --all-extras
       - name: Lint
@@ -27,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
           python-version: "3.15"
       - run: uv sync --all-extras
       - name: Tests
