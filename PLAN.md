@@ -71,7 +71,7 @@ AndesTravel/
 │   ├── data-model.md             # schema + consent policy
 │   ├── mcp-contract.md           # MCP tool contract
 │   ├── governance.md             # Ley 1581, OWASP LLM, evaluation
-│   ├── integration.md            # human boilerplate / TODO(human) checklist
+│   ├── integration.md            # human boilerplate / TODO checklist
 │   ├── runbook.md                # operations
 │   └── test-plan.md              # the four test suites + gates
 ├── src/andes/
@@ -179,9 +179,9 @@ Full detail in [`docs/test-plan.md`](docs/test-plan.md).
 
 ---
 
-## 9. Human-integration boilerplate (`TODO(human)`)
+## 9. Human-integration boilerplate (`TODO`)
 
-External accounts/credentials required for production. The codebase ships `TODO(human):`
+External accounts/credentials required for production. The codebase ships `TODO:`
 markers plus working mocks so the suite passes offline. Steps in
 [`docs/integration.md`](docs/integration.md).
 

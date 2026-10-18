@@ -3,7 +3,7 @@
 Inbound: the ``messages`` array of the first ``entry[].changes[].value``.
 Outbound: the ``/messages`` text payload (sent by the gateway via httpx).
 
-``TODO(human)``: verify the sender signature (``X-Hub-Signature-256``) before
+``TODO``: verify the sender signature (``X-Hub-Signature-256``) before
 trusting the payload, and set the real phone-number id / access token.
 """
 

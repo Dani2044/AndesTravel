@@ -2,10 +2,10 @@
 
 This project runs and tests entirely offline using mocks. The items below are the only
 things that require a human with real accounts/credentials to move from local/demo to
-production. Each has a `TODO(human):` marker in the code.
+production. Each has a `TODO:` marker in the code.
 
 > Never commit real credentials. Provide them through the environment (`op://`,
-> `/.env`, or a secret manager) and set `TODO(human)` → done in the corresponding adapter.
+> `/.env`, or a secret manager) and set `TODO` → done in the corresponding adapter.
 
 ## 1. WhatsApp — Meta WhatsApp Cloud API
 
@@ -55,9 +55,9 @@ production. Each has a `TODO(human):` marker in the code.
 
 | Item | Owner | Status |
 |---|---|---|
-| WhatsApp credentials + webhook | TODO(human) | ☐ |
-| Twilio number + webhook | TODO(human) | ☐ |
-| Wompi sandbox keys | TODO(human) | ☐ |
+| WhatsApp credentials + webhook | TODO | ☐ |
+| Twilio number + webhook | TODO | ☐ |
+| Wompi sandbox keys | TODO | ☐ |
 | Ollama model pulled | dev | ☐ |
-| Secrets in manager | TODO(human) | ☐ |
-| TLS at edge | TODO(human) | ☐ |
+| Secrets in manager | TODO | ☐ |
+| TLS at edge | TODO | ☐ |

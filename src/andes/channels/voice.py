@@ -3,7 +3,7 @@
 Inbound: Twilio form fields (``From``, ``To``, ``SpeechResult`` or ``Body``).
 Outbound: TwiML consumed by the telephony provider. Speech-to-text and
 text-to-speech run locally (faster-whisper + Piper) in the voice pipeline
-(``TODO(human): wire the real provider credentials``).
+(``TODO: wire the real provider credentials``).
 """
 
 from __future__ import annotations

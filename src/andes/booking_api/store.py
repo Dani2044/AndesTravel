@@ -2,7 +2,7 @@
 
 This is the ``L4 API mock`` from the architecture: availability, rates and
 reservations. It is intentionally dependency-free so the whole system (and its
-tests) can run offline. ``TODO(human)``: replace with real supplier integrations.
+tests) can run offline. ``TODO``: replace with real supplier integrations.
 """
 
 from __future__ import annotations
