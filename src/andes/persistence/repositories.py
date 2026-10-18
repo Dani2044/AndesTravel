@@ -216,3 +216,4 @@ async def ensure_traveler(session: AsyncSession, traveler_id: UUID) -> None:
     result = await session.execute(select(Traveler).where(Traveler.id == traveler_id))
     if result.scalar_one_or_none() is None:
         session.add(Traveler(id=traveler_id))
+        await session.flush()
