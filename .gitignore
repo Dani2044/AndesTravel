@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+.venv-*/
+*.egg
+
+# uv
+.uv/
+
+# Testing / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+junit.xml
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Local infra / build logs
+.build-logs/
+*.log
+
+# OS
+.DS_Store
+
+# Data
+*.sqlite
+*.sqlite3
+data/
+models/

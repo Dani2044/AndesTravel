@@ -1,0 +1,8 @@
+{"query": "quiero playa con buceo y arrecifes de coral", "expected_destination": "San Andrés"}
+{"query": "viaje familiar a fincas cafeteras y montaña", "expected_destination": "Eje Cafetero"}
+{"query": "expedición de ecoturismo por la selva y comunidades", "expected_destination": "Amazonía"}
+{"query": "playa con senderos y caminatas en parque nacional", "expected_destination": "Tayrona"}
+{"query": "el río de los cinco colores, temporada de colores", "expected_destination": "Caño Cristales"}
+{"query": "ciudad amurallada, historia y cultura del caribe", "expected_destination": "Cartagena"}
+{"query": "museos, monserrate y centro histórico cultural", "expected_destination": "Bogotá"}
+{"query": "cultura paisa, comuna 13 y gastronomía urbana", "expected_destination": "Medellín"}
