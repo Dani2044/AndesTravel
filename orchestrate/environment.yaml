@@ -1,0 +1,14 @@
+# The watsonx Orchestrate instance where the Andes Travel agents live.
+# scripts/wxo.py refuses to run unless `orchestrate env` has this environment active.
+name: redeban-saas
+url: https://api.us-south.watson-orchestrate.cloud.ibm.com/instances/f3dc0bb6-10f6-4b2c-a4a9-12083e2f49a2
+auth: ibm_iam
+
+# What this repo versions. The instance is shared with other projects; only these
+# agents, the collaborators they call and what they use (tools, toolkits, knowledge
+# bases, connections, skills) are pulled, planned and pushed.
+scope:
+  agents:
+    - Untitled_Agent_1_5717pu # andes_supervisor (calls the four specialists below)
+  # The agents point at a voice configuration owned by another project; keep it out.
+  voice_configs: false

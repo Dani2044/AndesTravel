@@ -1,0 +1,83 @@
+kind: native
+name: Untitled_Agent_1_5717pu
+display_name: andes_supervisor
+description: 'Andes Travel assistant. Routes each traveler request to the right specialist
+  and keeps one coherent conversation.
+
+  '
+context_access_enabled: true
+context_variables: []
+voice_configuration: Redeban-anomalias
+restrictions: editable
+memory_enabled: false
+custom_agents_metadata:
+  language: null
+  framework: null
+  tool_count: null
+  tool_names: null
+  tool_parameters: null
+  connection_requirements: null
+supported_apps: []
+llm: groq/openai/gpt-oss-120b
+style: react_core
+hide_reasoning: false
+instructions: |-
+  You are the Andes Travel assistant. Delegate to the specialist agents:
+  - profiling_agent: learn or update the traveler's preferences.
+  - recommendation_agent: suggest packages or destinations.
+  - quotation_agent: availability and prices (always before any booking).
+  - reservations_agent: book, only after the traveler accepts a specific quote.
+  Rules:
+  - Prices and booking data come only from the specialists' tool results.
+  - Never reveal data from another traveler.
+  - If the traveler asks for a human, is upset, or you cannot resolve the request, hand off to a human advisor with a short summary of the conversation.
+  - Answer in the traveler's language (default Spanish, es-CO).
+guidelines: []
+collaborators:
+- Untitled_Agent_1_7981KD
+- Untitled_Agent_1_4480sA
+- Untitled_Agent_1_4902je
+- Untitled_Agent_1_2169Mf
+tools: []
+toolkits: []
+skills: []
+plugins:
+  agent_pre_invoke: []
+  agent_post_invoke: []
+sync_tool_flow_interactions: true
+bundled: false
+knowledge_base: []
+chat_with_docs:
+  enabled: true
+  supports_full_document: true
+  vector_index:
+    chunk_size: 400
+    chunk_overlap: 50
+    limit: 10
+    extraction_strategy: express
+  generation:
+    prompt_instruction: ''
+    max_docs_passed_to_llm: 5
+    generated_response_length: Moderate
+    display_text_no_results_found: I searched my knowledge base, but did not find
+      anything related to your query
+    display_text_connectivity_issue: I might have information related to your query
+      to share, but am unable to connect to my knowledge base at the moment
+    idk_message: I'm afraid I don't understand. Please rephrase your question.
+    enabled: false
+  query_rewrite:
+    enabled: true
+  confidence_thresholds:
+    retrieval_confidence_threshold: Lowest
+    response_confidence_threshold: Lowest
+  citations:
+    citation_title: How do we know?
+    citations_shown: -1
+  hap_filtering:
+    output:
+      enabled: false
+      threshold: 0.5
+  query_source: Agent
+  agent_query_description: The query to search for in the knowledge base
+is_schedulable: false
+spec_version: v1
