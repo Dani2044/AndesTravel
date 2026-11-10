@@ -10,7 +10,9 @@ paths:
       operationId: Consultar_disponibilidad_8879L3
       summary: Consultar disponibilidad
       description: Check whether a package can be sold for the given dates and number of travelers, and
-        its rate per person. Call it before quote_package.
+        its rate per person. Packages have a fixed length; the return date must be departure + duration_days
+        - 1, otherwise it fails with invalid_duration and a message with the right return date. Call it
+        before quote_package.
       parameters:
       - name: package
         in: query

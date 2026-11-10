@@ -38,7 +38,7 @@ def _quote(client: TestClient, traveler: str = "ana@example.com", **over) -> dic
         "traveler_id": traveler,
         "package": "Cartagena",
         "start_date": "2026-12-10",
-        "end_date": "2026-12-14",
+        "end_date": "2026-12-13",
         "travelers": 2,
         "include_insurance": True,
         **over,
@@ -87,6 +87,18 @@ def test_profile_roundtrip_with_consent(client: TestClient) -> None:
     assert ctx["consent_personalization"] is True
     assert ctx["persona_prompt"] == "Viaja en pareja, prefiere playa y descanso."
     assert ctx["attributes"]["interests"] == ["playa"]
+    client.put(
+        "/travelers/3001234567/profile",
+        json={"consent_personalization": True, "attributes": {"interests": ["buceo"]}},
+        headers=H,
+    )
+    ctx = client.get("/travelers/+573001234567/context", headers=H).json()
+    assert ctx["attributes"] == {
+        "travel_style": "descanso",
+        "group_size": 2,
+        "interests": ["playa", "buceo"],
+    }
+    assert ctx["persona_prompt"] == "Viaja en pareja, prefiere playa y descanso."
 
 
 def test_profile_without_consent_is_not_stored_and_erases(client: TestClient) -> None:
@@ -111,19 +123,19 @@ def test_availability_and_domain_errors(client: TestClient) -> None:
         params={
             "package": "tayrona",
             "start_date": "2026-12-01",
-            "end_date": "2026-12-05",
+            "end_date": "2026-12-04",
             "travelers": 2,
         },
         headers=H,
     ).json()
-    assert ok["ok"] and ok["available"] and ok["nights"] == 4
+    assert ok["ok"] and ok["available"] and ok["nights"] == 3
     assert ok["rate_per_person"] == {"amount": 3_900_000, "currency": "COP"}
     bad = client.get(
         "/availability",
         params={
             "package": "Marte",
             "start_date": "2026-12-01",
-            "end_date": "2026-12-05",
+            "end_date": "2026-12-04",
             "travelers": 2,
         },
         headers=H,
@@ -144,12 +156,19 @@ def test_quote_prices_per_person_and_expires(client: TestClient) -> None:
         ({"start_date": "2027-02-30"}, "invalid_dates"),
         ({"travelers": 3000}, "invalid_travelers"),
         ({"package": "Atlántida"}, "unknown_package"),
+        ({"end_date": "2026-12-19"}, "invalid_duration"),
         ({"traveler_id": "no-soy-un-correo"}, "invalid_traveler_id"),
     ],
 )
 def test_quote_rejects_nonsense(client: TestClient, over: dict, code: str) -> None:
     q = _quote(client, **over)
     assert q["ok"] is False and q["error"]["code"] == code and q["total"] is None
+
+
+def test_wrong_length_names_the_return_date(client: TestClient) -> None:
+    q = _quote(client, package="Caño Cristales", start_date="2026-11-11", end_date="2026-11-20")
+    assert q["ok"] is False and q["error"]["code"] == "invalid_duration"
+    assert "dura 4 días" in q["error"]["message"] and "2026-11-14" in q["error"]["message"]
 
 
 def test_reservation_is_idempotent(client: TestClient) -> None:
@@ -197,7 +216,7 @@ def test_retry_after_expiry_returns_original_booking(client: TestClient, clock: 
 
 
 def test_idempotency_key_cannot_be_reused_for_another_quote(client: TestClient) -> None:
-    q1, q2 = _quote(client), _quote(client, package="Bogotá")
+    q1, q2 = _quote(client), _quote(client, package="Bogotá", end_date="2026-12-12")
     base = {"traveler_id": "ana@example.com", "idempotency_key": "same"}
     client.post("/reservations", json={**base, "quote_id": q1["quote_id"]}, headers=H)
     second = client.post("/reservations", json={**base, "quote_id": q2["quote_id"]}, headers=H)

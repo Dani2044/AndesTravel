@@ -76,7 +76,7 @@ async def _quote(client: httpx.AsyncClient, traveler: str) -> dict:
             "traveler_id": traveler,
             "package": "eje cafetero",
             "start_date": "2026-12-20",
-            "end_date": "2026-12-25",
+            "end_date": "2026-12-24",
             "travelers": 3,
         },
         headers=H,

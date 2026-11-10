@@ -143,6 +143,17 @@ def parse_trip(start_date: str, end_date: str, today: date) -> Trip:
     return Trip(start, end)
 
 
+def check_duration(package: Package, trip: Trip) -> None:
+    """Packages have a fixed length: the return date is departure + duration_days - 1."""
+    expected = trip.start + timedelta(days=package.duration_days - 1)
+    if trip.end != expected:
+        raise DomainError(
+            "invalid_duration",
+            f"El paquete {package.name} dura {package.duration_days} días: saliendo el "
+            f"{trip.start.isoformat()} regresas el {expected.isoformat()}.",
+        )
+
+
 def check_travelers(travelers: int) -> int:
     if not 1 <= travelers <= MAX_TRAVELERS:
         raise DomainError(
@@ -179,6 +190,22 @@ def quote_lines(package: Package, travelers: int, include_insurance: bool) -> li
 
 def commission(total: int) -> int:
     return int(total * COMMISSION_RATE)
+
+
+def merge_attributes(previous: dict, new: dict) -> dict:
+    """Update a stored profile without losing what earlier conversations taught us.
+
+    New values win; interests accumulate (case-insensitive, first spelling kept).
+    """
+    merged = {**previous, **{k: v for k, v in new.items() if k != "interests"}}
+    interests: list[str] = []
+    for item in [*previous.get("interests", []), *new.get("interests", [])]:
+        if fold(item) not in {fold(i) for i in interests}:
+            interests.append(item)
+    merged.pop("interests", None)
+    if interests:
+        merged["interests"] = interests
+    return merged
 
 
 def clean_persona_prompt(text: str | None) -> str | None:

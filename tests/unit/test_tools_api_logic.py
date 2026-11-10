@@ -78,12 +78,32 @@ def test_check_travelers_rejects(n: int) -> None:
     assert err.value.code == "invalid_travelers"
 
 
+def test_check_duration_is_inclusive() -> None:
+    pkg = logic.match_package("Eje Cafetero", catalog_packages())  # 5 days
+    logic.check_duration(pkg, logic.parse_trip("2026-12-20", "2026-12-24", TODAY))
+    for end in ("2026-12-23", "2026-12-25"):
+        with pytest.raises(DomainError) as err:
+            logic.check_duration(pkg, logic.parse_trip("2026-12-20", end, TODAY))
+        assert err.value.code == "invalid_duration" and "2026-12-24" in err.value.message
+
+
 def test_quote_lines_multiply_by_travelers() -> None:
     pkg = logic.match_package("Cartagena", catalog_packages())
     lines = logic.quote_lines(pkg, 3, include_insurance=True)
     assert lines[0]["amount"] == pkg.rate_per_person * 3
     assert lines[1]["amount"] == logic.INSURANCE_PER_PERSON * 3
     assert all(line["quantity"] == 3 for line in lines)
+
+
+def test_merge_attributes_keeps_earlier_facts() -> None:
+    previous = {"interests": ["eje cafetero"], "budget_range": "medio"}
+    new = {"interests": ["Eje Cafetero", "naturaleza"], "group_size": 3}
+    assert logic.merge_attributes(previous, new) == {
+        "budget_range": "medio",
+        "group_size": 3,
+        "interests": ["eje cafetero", "naturaleza"],
+    }
+    assert logic.merge_attributes({}, {"interests": []}) == {}
 
 
 def test_persona_prompt_limits() -> None:

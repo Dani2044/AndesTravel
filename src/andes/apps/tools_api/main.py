@@ -158,8 +158,9 @@ def create_app(
             "Save the traveler's preferences and personalization summary. Only call it "
             "after the traveler explicitly consented to storing preferences; send "
             "consent_personalization=false when they decline or withdraw consent, which "
-            "erases the stored profile. Send the full profile each time (it replaces the "
-            "previous one)."
+            "erases the stored profile. Attributes are merged into the stored ones "
+            "(interests accumulate). persona_prompt replaces the stored one, so rewrite it "
+            "with everything known; leave it out to keep the stored one."
         ),
         response_model=ProfileOut,
         dependencies=auth,
@@ -189,9 +190,12 @@ def create_app(
             if previous and previous.consent_personalization and previous.consent_at
             else at
         )
-        attributes = body.attributes.model_dump(exclude_none=True)
-        if not attributes.get("interests"):
-            attributes.pop("interests", None)
+        kept = previous if previous and previous.consent_personalization else None
+        attributes = logic.merge_attributes(
+            kept.attributes if kept else {}, body.attributes.model_dump(exclude_none=True)
+        )
+        if persona is None and kept:
+            persona = kept.persona_prompt
         await repo.save_profile(
             Profile(
                 traveler_id=tid,
@@ -240,7 +244,10 @@ def create_app(
         summary="Consultar disponibilidad",
         description=(
             "Check whether a package can be sold for the given dates and number of "
-            "travelers, and its rate per person. Call it before quote_package."
+            "travelers, and its rate per person. Packages have a fixed length: the return "
+            "date must be departure + duration_days - 1, otherwise it fails with "
+            "invalid_duration and a message with the right return date. Call it before "
+            "quote_package."
         ),
         response_model=AvailabilityOut,
         dependencies=auth,
@@ -256,6 +263,7 @@ def create_app(
         try:
             pkg = logic.match_package(package, await repo.list_packages())
             trip = logic.parse_trip(start_date, end_date, logic.local_today(at))
+            logic.check_duration(pkg, trip)
             logic.check_travelers(travelers)
         except DomainError as exc:
             return _fail(AvailabilityOut, exc)
@@ -284,6 +292,7 @@ def create_app(
             tid = logic.normalize_traveler_id(body.traveler_id)
             pkg = logic.match_package(body.package, await repo.list_packages())
             trip = logic.parse_trip(body.start_date, body.end_date, logic.local_today(at))
+            logic.check_duration(pkg, trip)
             n = logic.check_travelers(body.travelers)
         except DomainError as exc:
             return _fail(QuoteOut, exc)
