@@ -104,6 +104,8 @@ def render(run: int, today: date) -> Path:
         "enable_verbose_logging": False,
         "n_runs": 1,
         "llm_user_config": {
+            # the default simulated user (llama-3-3-70b) ended conversations too early
+            "model_id": "groq/openai/gpt-oss-120b",
             "user_response_style": [
                 "Write in Colombian Spanish, short messages, like a real customer.",
                 "Give only the facts your story allows, when the assistant asks for them.",
