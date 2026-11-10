@@ -1,6 +1,6 @@
 {
   "agent": "Untitled_Agent_1_5717pu",
-  "story": "Eres un viajero nuevo. Tu correo es test+golden-06@andes.test. Quieres el paquete de Medellín del {d+45} al {d+47} para 2 personas en total. No quieres guardar preferencias. Cuando te muestren la cotización, aceptas y pides confirmar la reserva.",
+  "story": "Eres un viajero nuevo. Tu correo es test+golden-06@andes.test. Quieres el paquete de Medellín del {d+45} al {d+47} para 2 personas en total. No quieres guardar preferencias. Cuando te muestren la cotización, aceptas y pides confirmar la reserva. Si te preguntan las fechas, respondes: del {d+45} al {d+47}. Si te preguntan cuántas personas, respondes: 2 en total.",
   "starting_sentence": "Quiero reservar Medellín para dos",
   "goals": {
     "contexto": [

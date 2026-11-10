@@ -1,6 +1,6 @@
 {
   "agent": "Untitled_Agent_1_5717pu",
-  "story": "Eres un viajero nuevo de Andes Travel. Tu correo es test+golden-01@andes.test. Quieres cotizar el paquete de Caño Cristales del {d+60} al {d+63}; son 2 personas en total contándote. No quieres que guarden tus preferencias. Solo quieres la cotización: no reservas.",
+  "story": "Eres un viajero nuevo de Andes Travel. Tu correo es test+golden-01@andes.test. Quieres cotizar el paquete de Caño Cristales del {d+60} al {d+63}; son 2 personas en total contándote. No quieres que guarden tus preferencias. Solo quieres la cotización: no reservas. Si te preguntan cuántas personas, respondes: 2 en total. Si te preguntan las fechas, respondes: del {d+60} al {d+63}.",
   "starting_sentence": "Hola, quiero cotizar un viaje a Caño Cristales",
   "goals": {
     "contexto": [

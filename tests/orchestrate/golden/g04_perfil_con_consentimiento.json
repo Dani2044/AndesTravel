@@ -1,7 +1,7 @@
 {
   "agent": "Untitled_Agent_1_5717pu",
   "story": "Eres un viajero nuevo. Tu correo es test+golden-04@andes.test. Viajas en pareja, les gusta la playa y descansar, presupuesto medio. Cuando te pregunten si pueden guardar tus preferencias, dices que sí. Luego pides que te recomienden un destino. Solo quieres ideas: no das fechas ni pides cotización, y si te las preguntan respondes que por ahora solo quieres ideas.",
-  "starting_sentence": "Hola, quiero ideas para un viaje en pareja",
+  "starting_sentence": "Hola, quiero ideas para un viaje en pareja: nos gusta la playa y descansar",
   "goals": {
     "contexto": [
       "perfil"
