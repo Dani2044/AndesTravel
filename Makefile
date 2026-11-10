@@ -116,15 +116,50 @@ api-seed-sql: ## Regenerate supabase/seed.sql from the catalog
 db-apply: ## Apply supabase/migrations + seed to TOOLS_DATABASE_URL (from .env)
 	$(PY) --env-file .env python scripts/db_apply.py
 
+# Hosting: Render free plan (service andes-tools-api, branch feat/poc-tools-api,
+# auto-deploy on push). The workspace has NO payment method, so it cannot bill:
+# over the limits Render suspends the service instead. It sleeps after 15 min idle
+# and takes ~1 min to wake, so run `make api-warm` before testing or a demo.
+# The URL lives in .env (TOOLS_API_URL), not in the public repo.
+.PHONY: api-warm
+api-warm: ## Wake the deployed tools API (Render free sleeps when idle) and wait until healthy
+	@set -a; . ./.env; set +a; \
+	for i in $$(seq 1 24); do \
+		if curl -fsS --max-time 10 "$$TOOLS_API_URL/health"; then echo; exit 0; fi; \
+		echo "waking up... ($$i)"; sleep 5; \
+	done; echo "API did not answer in 2 minutes"; exit 1
+
+# --- Alternative: IBM Code Engine (needs Code Engine access in the IBM account) ---
+# Cost caps, applied on every create/update. Worst case with these values is ONE
+# instance of 0.25 vCPU / 0.5 GB running the whole month (~USD 23 of compute).
+# Never use --max-scale 0: in Code Engine it means "no limit", not "off".
+CE_CAPS := --cpu 0.25 --memory 0.5G --min-scale 0 --max-scale 1 \
+	--concurrency 10 --request-timeout 30
+
 .PHONY: api-deploy
-api-deploy: ## Build from source and deploy the tools API to Code Engine
+api-deploy: ## Build from source and deploy the tools API to Code Engine (capped)
 	ibmcloud ce project select --name $(CE_PROJECT)
 	if ibmcloud ce app get --name $(CE_APP) >/dev/null 2>&1; then \
-		ibmcloud ce app update --name $(CE_APP) --build-source . ; \
+		ibmcloud ce app update --name $(CE_APP) --build-source . --build-size small $(CE_CAPS) ; \
 	else \
-		ibmcloud ce app create --name $(CE_APP) --build-source . --port 8080 \
-			--cpu 0.25 --memory 0.5G --min-scale 0 --max-scale 2 --env-from-secret $(CE_SECRET) ; \
+		ibmcloud ce app create --name $(CE_APP) --build-source . --build-size small --port 8080 \
+			$(CE_CAPS) --env-from-secret $(CE_SECRET) ; \
 	fi
+
+.PHONY: api-off
+api-off: ## Kill switch: take the API off the internet (no traffic = no charges); keeps everything
+	ibmcloud ce project select --name $(CE_PROJECT)
+	ibmcloud ce app update --name $(CE_APP) --visibility project --min-scale 0
+
+.PHONY: api-on
+api-on: ## Put the API back on its public URL (same URL, no rebuild)
+	ibmcloud ce project select --name $(CE_PROJECT)
+	ibmcloud ce app update --name $(CE_APP) --visibility public
+
+.PHONY: api-status
+api-status: ## Show visibility, scale caps and running instances of the tools API
+	ibmcloud ce project select --name $(CE_PROJECT)
+	ibmcloud ce app get --name $(CE_APP)
 
 .PHONY: api-scale-demo
 api-scale-demo: ## Keep one instance warm for a demo (~USD 0.75/day)
