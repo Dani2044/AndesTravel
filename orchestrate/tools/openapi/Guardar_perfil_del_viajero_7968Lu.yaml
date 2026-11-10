@@ -12,8 +12,8 @@ paths:
       description: Save the traveler's preferences and personalization summary. Only call it after the
         traveler explicitly consented to storing preferences; send consent_personalization=false when
         they decline or withdraw consent, which erases the stored profile. Attributes are merged into
-        the stored ones (interests accumulate). persona_prompt replaces the stored one, so rewrite it with
-        everything known; leave it out to keep the stored one.
+        the stored ones (interests accumulate). persona_prompt replaces the stored one, so rewrite it
+        with everything known; leave it out to keep the stored one.
       requestBody:
         required: true
         content:
