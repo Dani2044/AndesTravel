@@ -47,6 +47,10 @@ paths:
                     required:
                     - code
                     - message
+                  today:
+                    type: string
+                    title: Today
+                    description: Today's date in Colombia (YYYY-MM-DD). Trip dates must be after it.
                   attributes:
                     type: object
                     title: Attributes
@@ -70,10 +74,6 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
-                  today:
-                    type: string
-                    title: Today
-                    description: Today's date in Colombia (YYYY-MM-DD). Trip dates must be after it.
                   consent_personalization:
                     type: boolean
                     title: Consent Personalization

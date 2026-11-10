@@ -87,16 +87,28 @@ WXO_PY ?= $(shell uv tool dir 2>/dev/null)/ibm-watsonx-orchestrate/bin/python
 WXO := $(WXO_PY) orchestrate/scripts/wxo.py
 WXO_PUSH_FLAGS := $(if $(APPLY),--apply) $(if $(ONLY),--only $(ONLY)) $(if $(UPDATE_SAFE),--update-safe)
 
+WXO_ENV ?= redeban-saas
+
+# The ADK token for the SaaS instance expires quickly. With WXO_API_KEY in .env every
+# wxo-* target refreshes it first; without it, run `orchestrate env activate $(WXO_ENV)`.
+.PHONY: wxo-login
+wxo-login: ## Orchestrate: activate the environment with WXO_API_KEY from .env (no prompt)
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	if [ -n "$$WXO_API_KEY" ]; then \
+		$(dir $(WXO_PY))orchestrate env activate $(WXO_ENV) --api-key "$$WXO_API_KEY" >/dev/null \
+			&& echo "orchestrate: $(WXO_ENV) active"; \
+	else echo "WXO_API_KEY not in .env; using the current token (orchestrate env activate $(WXO_ENV))"; fi
+
 .PHONY: wxo-pull
-wxo-pull: ## Orchestrate: export the instance into orchestrate/
+wxo-pull: wxo-login ## Orchestrate: export the instance into orchestrate/
 	$(WXO) pull
 
 .PHONY: wxo-plan
-wxo-plan: ## Orchestrate: diff orchestrate/ against the instance
+wxo-plan: wxo-login ## Orchestrate: diff orchestrate/ against the instance
 	$(WXO) plan
 
 .PHONY: wxo-push
-wxo-push: ## Orchestrate: push changed files (dry run; APPLY=1 to apply, ONLY=agents/X)
+wxo-push: wxo-login ## Orchestrate: push changed files (dry run; APPLY=1 to apply, ONLY=agents/X)
 	$(WXO) push $(WXO_PUSH_FLAGS)
 
 .PHONY: tools-specs
