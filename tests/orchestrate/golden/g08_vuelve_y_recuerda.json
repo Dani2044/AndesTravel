@@ -1,0 +1,63 @@
+{
+  "x_seed": {
+    "profile": {
+      "attributes": {
+        "interests": [
+          "buceo",
+          "snorkel",
+          "playa"
+        ],
+        "companions": "pareja"
+      },
+      "persona_prompt": "Viaja en pareja. Le encantan el buceo y el snorkel; prefiere playa y descanso."
+    }
+  },
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Ya eres cliente de Andes Travel y antes autorizaste guardar tus preferencias. Tu correo es test+golden-08@andes.test. Esta vez solo preguntas qué te recomiendan; no das preferencias nuevas aunque te pregunten. No pides cotización.",
+  "starting_sentence": "Hola de nuevo, ¿qué me recomiendan esta vez?",
+  "goals": {
+    "contexto": [
+      "recommendation_agent"
+    ],
+    "recommendation_agent": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-08@andes.test"
+      }
+    },
+    {
+      "name": "recommendation_agent",
+      "type": "tool_call",
+      "tool_name": "chat_with_collaborator_recommendation_agent",
+      "args": {
+        "message": "x"
+      },
+      "arg_matching": {
+        "message": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Recomienda San Andrés por el buceo y el snorkel.",
+      "keywords": [
+        "San Andrés"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [],
+    "reservations": 0,
+    "profile": {
+      "consent": true
+    }
+  }
+}

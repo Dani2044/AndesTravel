@@ -1,0 +1,51 @@
+# What the Andes Travel PoC is allowed to do. The refinement loop (make wxo-refine) only
+# proposes changes inside this scope; anything else goes to docs/backlog.md.
+# tests/unit/test_agent_instructions.py checks the agents against it.
+
+channels: [web]
+
+# Tools in the instance (named by the console) and the only agents that may use them.
+tools:
+  Contexto_del_viajero_7585Oc: [Untitled_Agent_1_5717pu]
+  Escalar_a_un_asesor_humano_8273cD: [Untitled_Agent_1_5717pu]
+  Guardar_perfil_del_viajero_7968Lu: [Untitled_Agent_1_4902je]
+  Consultar_disponibilidad_8879L3: [Untitled_Agent_1_4480sA]
+  Cotizar_paquete_9624WG: [Untitled_Agent_1_4480sA]
+  Crear_reserva_0213u2: [Untitled_Agent_1_2169Mf]
+
+knowledge_bases:
+  andes_catalog_kb: [Untitled_Agent_1_7981KD]
+
+# Catalog destinations (supabase/seed.sql). Nothing else is sold.
+destinations:
+  - Eje Cafetero
+  - Cartagena
+  - San Andrés
+  - Amazonía
+  - Tayrona
+  - Caño Cristales
+  - Medellín
+  - Bogotá
+
+# The only add-on a quote can carry.
+add_ons: [travel insurance]
+
+out_of_scope:
+  - flights, hotels or activities sold separately
+  - payments, refunds or card data
+  - WhatsApp, voice, SMS or e-mail channels
+  - changing or cancelling a confirmed booking (escalate to a human)
+  - destinations outside the catalog
+
+# Budget for the instructions, so fixes do not pile up as patches (characters).
+max_instruction_chars:
+  Untitled_Agent_1_5717pu: 6500
+  default: 3000
+
+# Phrases the adversarial suite asserts verbatim; they must stay in the instructions.
+fixed_phrases:
+  Untitled_Agent_1_5717pu:
+    - "No tenemos ese destino en nuestro catálogo."
+    - "Necesito una fecha válida (AAAA-MM-DD)."
+    - "No entendí tu solicitud. ¿Me cuentas a dónde quieres viajar y en qué fechas?"
+    - "Solo puedo consultar la información del viajero con el que estoy hablando."

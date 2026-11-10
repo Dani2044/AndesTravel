@@ -52,10 +52,6 @@ test-integration: ## Integration tests only
 test-load: ## Load tests (Locust)
 	$(PY) locust -f tests/load/locustfile.py --headless -u 20 -r 2 --run-time 1m --host http://localhost:8000
 
-.PHONY: test-adversarial
-test-adversarial: ## Adversarial / red-team tests (promptfoo)
-	npx --yes promptfoo@latest eval -c tests/adversarial/promptfooconfig.yaml
-
 .PHONY: eval
 eval: ## Retrieval / RAG evaluation (offline)
 	$(PY) python evals/ragas_eval.py
@@ -120,6 +116,51 @@ wxo-connection-creds: ## Orchestrate: give the andes_tools_api connection the TO
 	@set -a; . ./.env; set +a; \
 	$(dir $(WXO_PY))orchestrate connections set-credentials -a andes_tools_api \
 		--env $(or $(ENV),draft) --api-key "$$TOOLS_API_KEY"
+
+# --- Agent quality: golden stories, adversarial suite, refinement loop (Day 4) ---
+# All of them talk to the draft agents and write test+ travelers to Supabase.
+# Each evaluator run writes a new timestamped folder; the gate reads the latest one.
+ORCH := $(dir $(WXO_PY))orchestrate
+GOLDEN := $(PY) --env-file .env python scripts/golden.py
+EVAL_RUNS ?= 1 2
+PROMPTFOO := PROMPTFOO_DISABLE_TELEMETRY=1 PROMPTFOO_DISABLE_UPDATE=1 \
+	PROMPTFOO_PYTHON=$(CURDIR)/.venv/bin/python npx --yes promptfoo@0.125.1
+
+.PHONY: wxo-eval
+wxo-eval: wxo-login api-warm ## Golden stories: simulated users vs draft, judged by the evaluator and Supabase (2 runs)
+	@for run in $(EVAL_RUNS); do \
+		echo "== run $$run"; \
+		$(GOLDEN) reset && $(GOLDEN) render --run $$run || exit 1; \
+		$(ORCH) evaluations evaluate -c build/golden/run$$run/config.yaml \
+			> build/golden/run$$run/evaluate.log 2>&1 \
+			|| { tail -20 build/golden/run$$run/evaluate.log; exit 1; }; \
+		$(GOLDEN) judge --run $$run; \
+	done
+	$(GOLDEN) gate
+
+.PHONY: test-adversarial
+test-adversarial: api-warm ## Adversarial suite (promptfoo) vs the draft supervisor, with category thresholds
+	@mkdir -p build/adversarial
+	@set -a; . ./.env; set +a; \
+		$(PROMPTFOO) eval -c tests/adversarial/promptfooconfig.yaml --no-cache -j 4 \
+		-o build/adversarial/results.json > build/adversarial/promptfoo.log 2>&1 || true
+	$(PY) python tests/adversarial/check_thresholds.py build/adversarial/results.json
+
+.PHONY: wxo-refine
+wxo-refine: ## Refinement report from the last eval + adversarial runs (build/refine/report.md)
+	@last=$$(ls -d build/eval/run1/*/ 2>/dev/null | tail -1); \
+	if [ -n "$$last" ]; then \
+		$(ORCH) evaluations analyze -d "$$last" -t orchestrate/tools/openapi \
+			> build/eval/analyze.txt 2>&1 || true; \
+	fi
+	$(PY) python scripts/refine_report.py
+
+.PHONY: wxo-gate
+wxo-gate: test wxo-eval test-adversarial ## Everything that must pass before make wxo-push APPLY=1
+
+.PHONY: test-travelers-clean
+test-travelers-clean: ## Delete every test+ traveler (golden and adversarial) from Supabase
+	$(GOLDEN) cleanup
 
 # --- PoC tools API (src/andes/apps/tools_api) ---
 CE_PROJECT ?= andes-poc

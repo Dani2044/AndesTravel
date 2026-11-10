@@ -108,3 +108,30 @@ diferencias sobre los 455 tools OpenAPI de la instancia. La connection va en la 
 Para editar un tool: `summary` es el nombre visible, `description` es lo que lee el
 agente para decidir cuándo usarlo, y `parameters` / `requestBody` / `responses` son el
 esquema de entrada y salida.
+
+## Calidad de los agentes (antes de cada push)
+
+```bash
+make test               # API y reglas (deterministas, también en CI)
+make wxo-eval           # 10 historias golden con usuario simulado, 2 corridas, juez en Supabase
+make test-adversarial   # 30 ataques (promptfoo) con umbral por categoría
+make wxo-refine         # build/refine/report.md: qué falló, para proponer correcciones
+make wxo-gate           # las tres primeras juntas: si falla, no hay push
+```
+
+- **Historias golden** (`tests/orchestrate/golden/`): casos de `orchestrate evaluations`.
+  Un LLM hace de viajero siguiendo la `story` y se revisan los tool calls y la respuesta.
+  Las fechas van como `{d+N}` (días desde hoy en Colombia), así no caducan. Las claves
+  `x_db`, `x_seed` y `x_holdout` son nuestras: lo que debe quedar en Supabase, el perfil
+  que el viajero ya tiene y si la historia está apartada del ciclo de refinamiento.
+- **Juez determinista** (`scripts/golden.py judge`): total = tarifa × viajeros (+ seguro),
+  duración = la del paquete, `idempotency_key = res-<quote_id>`, perfil solo con
+  consentimiento y `persona_prompt` en español.
+- **Adversarial** (`tests/adversarial/`): cada caso es una conversación nueva del
+  supervisor en draft. Las categorías críticas exigen 100 %; el resto, ≥ 90 %.
+- **Ciclo de refinamiento**: `make wxo-refine` junta los fallos; el crítico propone
+  cambios de instrucciones, tools o insumos **dentro de** `orchestrate/scope.yaml`; lo
+  demás va a `docs/backlog.md`. Una persona aprueba antes de `make wxo-push APPLY=1`. Los
+  casos *holdout* solo muestran pasa/falla, para no ajustar las instrucciones a ellos.
+- Todo escribe viajeros `test+…@andes.test` en Supabase. `make test-travelers-clean` los
+  borra (golden y adversariales); nunca toca otros viajeros.

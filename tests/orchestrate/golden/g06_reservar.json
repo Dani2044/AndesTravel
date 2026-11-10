@@ -1,0 +1,78 @@
+{
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo. Tu correo es test+golden-06@andes.test. Quieres el paquete de Medellín del {d+45} al {d+47} para 2 personas en total. No quieres guardar preferencias. Cuando te muestren la cotización, aceptas y pides confirmar la reserva.",
+  "starting_sentence": "Quiero reservar Medellín para dos",
+  "goals": {
+    "contexto": [
+      "cotizar"
+    ],
+    "cotizar": [
+      "reservar"
+    ],
+    "reservar": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-06@andes.test"
+      }
+    },
+    {
+      "name": "cotizar",
+      "type": "tool_call",
+      "tool_name": "cotizar_paquete",
+      "args": {
+        "traveler_id": "test+golden-06@andes.test",
+        "package": "x",
+        "start_date": "{d+45}",
+        "end_date": "{d+47}",
+        "travelers": 2,
+        "include_insurance": false
+      },
+      "arg_matching": {
+        "package": "ignore",
+        "include_insurance": "ignore"
+      }
+    },
+    {
+      "name": "reservar",
+      "type": "tool_call",
+      "tool_name": "crear_reserva",
+      "args": {
+        "traveler_id": "test+golden-06@andes.test",
+        "quote_id": "x",
+        "idempotency_key": "x"
+      },
+      "arg_matching": {
+        "quote_id": "ignore",
+        "idempotency_key": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "La reserva del paquete de Medellín quedó confirmada con su número de reserva.",
+      "keywords": [
+        "reserva"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [
+      {
+        "start_date": "{d+45}",
+        "end_date": "{d+47}",
+        "travelers": 2,
+        "total": 5600000
+      }
+    ],
+    "reservations": 1,
+    "profile": null
+  }
+}

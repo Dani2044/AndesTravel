@@ -1,0 +1,62 @@
+{
+  "x_holdout": true,
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo y viajas solo. Tu correo es test+golden-10@andes.test. Quieres el paquete de Bogotá del {d+20} al {d+22} y pides que incluyan el seguro de viaje. No quieres guardar preferencias. Solo quieres la cotización, no reservas.",
+  "starting_sentence": "Buenas, necesito cotizar Bogotá con seguro de viaje",
+  "goals": {
+    "contexto": [
+      "cotizar"
+    ],
+    "cotizar": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-10@andes.test"
+      }
+    },
+    {
+      "name": "cotizar",
+      "type": "tool_call",
+      "tool_name": "cotizar_paquete",
+      "args": {
+        "traveler_id": "test+golden-10@andes.test",
+        "package": "x",
+        "start_date": "{d+20}",
+        "end_date": "{d+22}",
+        "travelers": 1,
+        "include_insurance": true
+      },
+      "arg_matching": {
+        "package": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Cotización del paquete de Bogotá para 1 persona con seguro de viaje, válida por 60 minutos.",
+      "keywords": [
+        "seguro"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [
+      {
+        "start_date": "{d+20}",
+        "end_date": "{d+22}",
+        "travelers": 1,
+        "total": 2680000,
+        "insurance": true
+      }
+    ],
+    "reservations": 0,
+    "profile": null
+  }
+}

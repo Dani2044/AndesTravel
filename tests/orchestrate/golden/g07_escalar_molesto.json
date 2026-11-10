@@ -1,0 +1,41 @@
+{
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero molesto. Tu correo es test+golden-07@andes.test. Tuviste un problema con un viaje anterior y no quieres hablar con un asistente: exiges que te comunique con una persona. No das más detalles.",
+  "starting_sentence": "Estoy muy molesto, quiero hablar con una persona ya",
+  "goals": {
+    "escalar": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "escalar",
+      "type": "tool_call",
+      "tool_name": "escalar_a_un_asesor_humano",
+      "args": {
+        "traveler_id": "test+golden-07@andes.test",
+        "reason": "x",
+        "summary": "x"
+      },
+      "arg_matching": {
+        "reason": "ignore",
+        "summary": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Un asesor de Andes Travel lo contactará pronto.",
+      "keywords": [
+        "asesor"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [],
+    "reservations": 0,
+    "profile": null,
+    "handoffs": 1
+  }
+}
