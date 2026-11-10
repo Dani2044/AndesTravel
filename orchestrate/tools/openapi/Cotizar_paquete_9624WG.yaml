@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: Cotizar paquete
+  version: 1.0.0
+servers:
+- url: https://andes-tools-api.onrender.com
+paths:
+  /quotes:
+    post:
+      operationId: Cotizar_paquete_9624WG
+      summary: Cotizar paquete
+      description: Create an itemized quote for a package, dates and number of travelers. The rate and
+        the optional insurance are per person. Present only the lines, total and expiry returned here;
+        never estimate prices.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              title: QuoteIn
+              description: The HTML request body used to satisfy this user utterance.
+              properties:
+                package:
+                  type: string
+                  title: Package
+                  description: Package id, package name or destination name.
+                end_date:
+                  type: string
+                  title: End Date
+                  description: Return date, YYYY-MM-DD.
+                travelers:
+                  type: integer
+                  title: Travelers
+                  description: Number of travelers (1-20).
+                start_date:
+                  type: string
+                  title: Start Date
+                  description: Departure date, YYYY-MM-DD.
+                traveler_id:
+                  type: string
+                  title: Traveler Id
+                  description: Traveler e-mail or mobile number.
+                include_insurance:
+                  type: boolean
+                  title: Include Insurance
+                  description: Add travel insurance (priced per person).
+                  default: false
+              required:
+              - traveler_id
+              - package
+              - start_date
+              - end_date
+              - travelers
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    title: Ok
+                    description: False when the request could not be fulfilled; see error.
+                  error:
+                    type: object
+                    title: ErrorInfo
+                    properties:
+                      code:
+                        type: string
+                        title: Code
+                        description: Stable error code, e.g. unknown_package, invalid_dates.
+                      message:
+                        type: string
+                        title: Message
+                        description: Short explanation in Spanish, safe to tell the traveler.
+                    required:
+                    - code
+                    - message
+                  lines:
+                    type: array
+                    title: Lines
+                    items:
+                      type: object
+                      title: QuoteLine
+                      properties:
+                        amount:
+                          type: integer
+                          title: Amount
+                        quantity:
+                          type: integer
+                          title: Quantity
+                        description:
+                          type: string
+                          title: Description
+                        unit_amount:
+                          type: integer
+                          title: Unit Amount
+                      required:
+                      - description
+                      - unit_amount
+                      - quantity
+                      - amount
+                  total:
+                    type: object
+                    title: Money
+                    properties:
+                      amount:
+                        type: integer
+                        title: Amount
+                        description: Integer amount in the currency's units (COP has no cents).
+                      currency:
+                        type: string
+                        title: Currency
+                    required:
+                    - amount
+                    - currency
+                  package:
+                    type: object
+                    title: PackageInfo
+                    properties:
+                      name:
+                        type: string
+                        title: Name
+                      package_id:
+                        type: string
+                        title: Package Id
+                      destination:
+                        type: string
+                        title: Destination
+                      duration_days:
+                        type: integer
+                        title: Duration Days
+                    required:
+                    - package_id
+                    - destination
+                    - name
+                    - duration_days
+                  end_date:
+                    type: string
+                    title: End Date
+                  quote_id:
+                    type: string
+                    title: Quote Id
+                  travelers:
+                    type: integer
+                    title: Travelers
+                  expires_at:
+                    type: string
+                    title: Expires At
+                    description: ISO-8601 UTC time after which the quote is no longer valid.
+                  start_date:
+                    type: string
+                    title: Start Date
+      security:
+      - scheme0: []
+      x-ibm-orchestrate-app-id: andes_tools_api
+components:
+  securitySchemes:
+    scheme0:
+      type: apiKey
+      in: header
+      name: X-API-Key

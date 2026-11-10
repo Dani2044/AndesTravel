@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from andes.core.seed import COMMISSION_RATE
 
@@ -21,6 +21,8 @@ MAX_TRIP_DAYS = 30
 MAX_DAYS_AHEAD = 548  # ~18 months
 PERSONA_PROMPT_MAX = 600
 CURRENCY = "COP"
+# Andes Travel sells in Colombia (UTC-5, no daylight saving): "today" is Bogotá's date.
+LOCAL_TZ = timezone(timedelta(hours=-5), "America/Bogota")
 
 
 class DomainError(Exception):
@@ -97,7 +99,17 @@ def match_package(query: str, packages: list[Package]) -> Package:
     for p in packages:
         if wanted in (p.id, fold(p.name), fold(p.destination)):
             return p
+    # Agents sometimes add extras ("Eje Cafetero, Parque del Café"): accept the text when it
+    # names exactly one catalog destination or package.
+    named = [p for p in packages if fold(p.destination) in wanted or fold(p.name) in wanted]
+    if len(named) == 1:
+        return named[0]
     raise DomainError("unknown_package", "No tenemos ese destino en nuestro catálogo.")
+
+
+def local_today(now: datetime) -> date:
+    """Today's date in Colombia for a timezone-aware instant."""
+    return now.astimezone(LOCAL_TZ).date()
 
 
 # --------------------------------------------------------------------------- dates

@@ -91,3 +91,29 @@ def test_persona_prompt_limits() -> None:
     assert logic.clean_persona_prompt("   ") is None
     with pytest.raises(DomainError):
         logic.clean_persona_prompt("x" * 601)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Eje Cafetero, Parque del Café",
+        "paquete al eje cafetero",
+        "Café y montaña en familia (4 pax)",
+    ],
+)
+def test_match_package_accepts_one_destination_with_extras(query: str) -> None:
+    assert logic.match_package(query, catalog_packages()).destination == "Eje Cafetero"
+
+
+def test_match_package_rejects_text_naming_two_destinations() -> None:
+    with pytest.raises(DomainError) as err:
+        logic.match_package("Cartagena o San Andrés", catalog_packages())
+    assert err.value.code == "unknown_package"
+
+
+def test_local_today_is_bogota_date() -> None:
+    from datetime import UTC, datetime
+
+    # 02:00 UTC on Nov 10 is still Nov 9 in Bogotá (UTC-5).
+    assert logic.local_today(datetime(2026, 11, 10, 2, 0, tzinfo=UTC)) == date(2026, 11, 9)
+    assert logic.local_today(datetime(2026, 11, 10, 6, 0, tzinfo=UTC)) == date(2026, 11, 10)

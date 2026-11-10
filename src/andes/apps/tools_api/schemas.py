@@ -94,6 +94,10 @@ class TravelerContext(Result):
     recent_reservations: list[dict[str, Any]] = Field(
         default_factory=list, description="Up to 3 recent bookings (destination and dates)."
     )
+    today: str | None = Field(
+        default=None,
+        description="Today's date in Colombia (YYYY-MM-DD). Trip dates must be after it.",
+    )
 
 
 class HandoffIn(BaseModel):

@@ -64,6 +64,12 @@ def test_unknown_traveler_context(client: TestClient) -> None:
     body = client.get("/travelers/Nuevo@Example.com/context", headers=H).json()
     assert body["ok"] and body["traveler_id"] == "nuevo@example.com"
     assert body["known_traveler"] is False and body["persona_prompt"] is None
+    assert body["today"] == "2026-11-09"  # NOW in Bogotá
+
+
+def test_context_reports_today_even_on_invalid_id(client: TestClient) -> None:
+    body = client.get("/travelers/no-es-un-id/context", headers=H).json()
+    assert body["ok"] is False and body["today"] == "2026-11-09"
 
 
 def test_profile_roundtrip_with_consent(client: TestClient) -> None:

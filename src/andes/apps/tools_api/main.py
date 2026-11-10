@@ -124,16 +124,18 @@ def create_app(
             "Look up a returning traveler by e-mail or mobile number. Call it once at the "
             "start of the conversation, after the traveler gives their e-mail or phone. "
             "Returns the personalization summary (persona_prompt) and preferences only if "
-            "the traveler consented, plus their recent bookings."
+            "the traveler consented, plus their recent bookings, and today's date in "
+            "Colombia (today), to resolve relative dates such as 'este año' or 'el próximo mes'."
         ),
         response_model=TravelerContext,
         dependencies=auth,
     )
-    async def get_traveler_context(traveler_id: str, repo: Repo) -> TravelerContext:
+    async def get_traveler_context(traveler_id: str, repo: Repo, at: Now) -> TravelerContext:
+        today = logic.local_today(at).isoformat()
         try:
             tid = logic.normalize_traveler_id(traveler_id)
         except DomainError as exc:
-            return _fail(TravelerContext, exc)
+            return _fail(TravelerContext, exc).model_copy(update={"today": today})
         profile = await repo.get_profile(tid)
         reservations = await repo.recent_reservations(tid)
         consented = bool(profile and profile.consent_personalization)
@@ -145,6 +147,7 @@ def create_app(
             persona_prompt=profile.persona_prompt if consented and profile else None,
             attributes=profile.attributes if consented and profile else {},
             recent_reservations=reservations,
+            today=today,
         )
 
     @app.put(
@@ -252,7 +255,7 @@ def create_app(
     ) -> AvailabilityOut:
         try:
             pkg = logic.match_package(package, await repo.list_packages())
-            trip = logic.parse_trip(start_date, end_date, at.date())
+            trip = logic.parse_trip(start_date, end_date, logic.local_today(at))
             logic.check_travelers(travelers)
         except DomainError as exc:
             return _fail(AvailabilityOut, exc)
@@ -280,7 +283,7 @@ def create_app(
         try:
             tid = logic.normalize_traveler_id(body.traveler_id)
             pkg = logic.match_package(body.package, await repo.list_packages())
-            trip = logic.parse_trip(body.start_date, body.end_date, at.date())
+            trip = logic.parse_trip(body.start_date, body.end_date, logic.local_today(at))
             n = logic.check_travelers(body.travelers)
         except DomainError as exc:
             return _fail(QuoteOut, exc)

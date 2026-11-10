@@ -99,6 +99,16 @@ wxo-plan: ## Orchestrate: diff orchestrate/ against the instance
 wxo-push: ## Orchestrate: push changed files (dry run; APPLY=1 to apply, ONLY=agents/X)
 	$(WXO) push $(WXO_PUSH_FLAGS)
 
+.PHONY: tools-specs
+tools-specs: ## Regenerate build/andes_tools_api.openapi.yaml (tools API) to import in the Orchestrate console
+	$(PY) --env-file .env python scripts/gen_tool_specs.py
+
+.PHONY: wxo-connection-creds
+wxo-connection-creds: ## Orchestrate: give the andes_tools_api connection the TOOLS_API_KEY from .env (ENV=draft|live)
+	@set -a; . ./.env; set +a; \
+	$(dir $(WXO_PY))orchestrate connections set-credentials -a andes_tools_api \
+		--env $(or $(ENV),draft) --api-key "$$TOOLS_API_KEY"
+
 # --- PoC tools API (src/andes/apps/tools_api) ---
 CE_PROJECT ?= andes-poc
 CE_APP ?= andes-tools-api
@@ -116,11 +126,21 @@ api-seed-sql: ## Regenerate supabase/seed.sql from the catalog
 db-apply: ## Apply supabase/migrations + seed to TOOLS_DATABASE_URL (from .env)
 	$(PY) --env-file .env python scripts/db_apply.py
 
-# Hosting: Render free plan (service andes-tools-api, branch feat/poc-tools-api,
-# auto-deploy on push). The workspace has NO payment method, so it cannot bill:
+# Hosting: Render free plan (service andes-tools-api, branch feat/poc-tools-api).
+# Render reads the public repo without its GitHub app, so a push does NOT deploy:
+# push, then `make api-redeploy`. The workspace has NO payment method, so it cannot bill:
 # over the limits Render suspends the service instead. It sleeps after 15 min idle
 # and takes ~1 min to wake, so run `make api-warm` before testing or a demo.
 # The URL lives in .env (TOOLS_API_URL), not in the public repo.
+RENDER_SERVICE ?= srv-dbpi6iegekts73a1gu30
+
+.PHONY: api-redeploy
+api-redeploy: ## Deploy the pushed HEAD commit to Render and wait for it (needs RENDER_API_KEY in .env)
+	@git fetch -q origin && git branch -r --contains HEAD | grep -q . \
+		|| { echo "HEAD is not pushed yet: git push first"; exit 1; }
+	@set -a; . ./.env; set +a; \
+	render deploys create $(RENDER_SERVICE) --commit $$(git rev-parse HEAD) --wait --confirm -o text
+
 .PHONY: api-warm
 api-warm: ## Wake the deployed tools API (Render free sleeps when idle) and wait until healthy
 	@set -a; . ./.env; set +a; \

@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: Crear reserva
+  version: 1.0.0
+servers:
+- url: https://andes-tools-api.onrender.com
+paths:
+  /reservations:
+    post:
+      operationId: Crear_reserva_0213u2
+      summary: Crear reserva
+      description: Book a quote the traveler explicitly accepted. Fails with quote_expired when the quote
+        is past its expiry and with quote_not_found when the quote does not exist for this traveler. Reusing
+        an idempotency_key never creates a second booking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              title: ReservationIn
+              description: The HTML request body used to satisfy this user utterance.
+              properties:
+                quote_id:
+                  type: string
+                  title: Quote Id
+                  description: The quote the traveler explicitly accepted.
+                traveler_id:
+                  type: string
+                  title: Traveler Id
+                  description: Traveler e-mail or mobile number.
+                idempotency_key:
+                  type: string
+                  title: Idempotency Key
+                  description: One key per confirmed booking intent; reuse the same key on retries so
+                    the reservation is never duplicated.
+              required:
+              - traveler_id
+              - quote_id
+              - idempotency_key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    title: Ok
+                    description: False when the request could not be fulfilled; see error.
+                  error:
+                    type: object
+                    title: ErrorInfo
+                    properties:
+                      code:
+                        type: string
+                        title: Code
+                        description: Stable error code, e.g. unknown_package, invalid_dates.
+                      message:
+                        type: string
+                        title: Message
+                        description: Short explanation in Spanish, safe to tell the traveler.
+                    required:
+                    - code
+                    - message
+                  total:
+                    type: object
+                    title: Money
+                    properties:
+                      amount:
+                        type: integer
+                        title: Amount
+                        description: Integer amount in the currency's units (COP has no cents).
+                      currency:
+                        type: string
+                        title: Currency
+                    required:
+                    - amount
+                    - currency
+                  status:
+                    type: string
+                    title: Status
+                  package:
+                    type: object
+                    title: PackageInfo
+                    properties:
+                      name:
+                        type: string
+                        title: Name
+                      package_id:
+                        type: string
+                        title: Package Id
+                      destination:
+                        type: string
+                        title: Destination
+                      duration_days:
+                        type: integer
+                        title: Duration Days
+                    required:
+                    - package_id
+                    - destination
+                    - name
+                    - duration_days
+                  end_date:
+                    type: string
+                    title: End Date
+                  quote_id:
+                    type: string
+                    title: Quote Id
+                  travelers:
+                    type: integer
+                    title: Travelers
+                  start_date:
+                    type: string
+                    title: Start Date
+                  deduplicated:
+                    type: boolean
+                    title: Deduplicated
+                    description: True when this key was already used; nothing new was booked.
+                    default: false
+                  reservation_id:
+                    type: string
+                    title: Reservation Id
+      security:
+      - scheme0: []
+      x-ibm-orchestrate-app-id: andes_tools_api
+components:
+  securitySchemes:
+    scheme0:
+      type: apiKey
+      in: header
+      name: X-API-Key
