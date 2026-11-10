@@ -99,6 +99,41 @@ wxo-plan: ## Orchestrate: diff orchestrate/ against the instance
 wxo-push: ## Orchestrate: push changed files (dry run; APPLY=1 to apply, ONLY=agents/X)
 	$(WXO) push $(WXO_PUSH_FLAGS)
 
+# --- PoC tools API (src/andes/apps/tools_api) ---
+CE_PROJECT ?= andes-poc
+CE_APP ?= andes-tools-api
+CE_SECRET ?= andes-tools-api
+
+.PHONY: api-run
+api-run: ## Tools API locally on :8090 (in-memory unless TOOLS_DATABASE_URL is set)
+	TOOLS_API_KEY=$${TOOLS_API_KEY:-dev-key} $(PY) uvicorn andes.apps.tools_api.main:app --port 8090 --reload
+
+.PHONY: api-seed-sql
+api-seed-sql: ## Regenerate supabase/seed.sql from the catalog
+	$(PY) python scripts/gen_seed_sql.py
+
+.PHONY: db-apply
+db-apply: ## Apply supabase/migrations + seed to TOOLS_DATABASE_URL (from .env)
+	$(PY) --env-file .env python scripts/db_apply.py
+
+.PHONY: api-deploy
+api-deploy: ## Build from source and deploy the tools API to Code Engine
+	ibmcloud ce project select --name $(CE_PROJECT)
+	if ibmcloud ce app get --name $(CE_APP) >/dev/null 2>&1; then \
+		ibmcloud ce app update --name $(CE_APP) --build-source . ; \
+	else \
+		ibmcloud ce app create --name $(CE_APP) --build-source . --port 8080 \
+			--cpu 0.25 --memory 0.5G --min-scale 0 --max-scale 2 --env-from-secret $(CE_SECRET) ; \
+	fi
+
+.PHONY: api-scale-demo
+api-scale-demo: ## Keep one instance warm for a demo (~USD 0.75/day)
+	ibmcloud ce app update --name $(CE_APP) --min-scale 1
+
+.PHONY: api-scale-idle
+api-scale-idle: ## Scale the tools API back to zero (free tier)
+	ibmcloud ce app update --name $(CE_APP) --min-scale 0
+
 .PHONY: clean
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist

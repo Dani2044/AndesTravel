@@ -1,0 +1,23 @@
+# Knowledge base del agente de recomendaciones. Los documentos fuente viven en git:
+#   docs/catalogo.md       generado con `python scripts/gen_kb_docs.py` (no editar a mano)
+#   docs/politicas_faq.md  escrito a mano (contenido de demostración de la PoC)
+# Las rutas de `documents` son relativas a este archivo (así las resuelve el ADK).
+# `wxo.py push` sube los .md como .txt, que es el formato de texto que acepta la carga.
+#
+# Embeddings: ibm/granite-embedding-278m-multilingual (watsonx.ai, multilingüe, sirve
+# para español). Si la instancia no lo tiene disponible, usar intfloat/multilingual-e5-large.
+# Nota: `wxo.py pull` reescribe este archivo con lo que exporta la instancia y estos
+# comentarios se pierden; conserva la lista `documents`.
+spec_version: v1
+kind: knowledge_base
+name: andes_catalog_kb
+description: |
+  Catálogo de paquetes turísticos nacionales de Andes Travel por Colombia (destino,
+  duración, qué incluye, para quién es ideal y tarifa base por persona en COP) y las
+  políticas de la agencia: cancelación, seguro de viaje opcional, productos que no vende,
+  vencimiento de cotizaciones, pagos y horario de asesores.
+documents:
+  - docs/catalogo.md
+  - docs/politicas_faq.md
+vector_index:
+  embeddings_model_name: ibm/granite-embedding-278m-multilingual

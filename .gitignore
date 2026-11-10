@@ -26,6 +26,9 @@ junit.xml
 .env.*
 !.env.example
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # Local infra / build logs
 .build-logs/
 *.log
