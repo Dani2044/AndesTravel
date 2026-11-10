@@ -73,14 +73,19 @@ def audience(package: SeedPackage) -> str:
 def render_package(package: SeedPackage) -> str:
     days = package["duration_days"]
     nights = days - 1
+    # The KB is split into ~400-character chunks, so a chunk may miss the heading. Every
+    # line that describes the package repeats its exact name, or the recommender invents
+    # one from the description (e.g. "Escapada de playa para parejas").
+    label = f"{package['name']} ({package['destination']})"
     return "\n".join(
         [
             f"## {package['destination']}: {package['name']}",
             "",
+            f"- **Paquete:** {label}",
             f"- **Destino:** {package['destination']}, Colombia",
-            f"- **Duración:** {days} días y {nights} noches",
-            f"- **Qué incluye:** {package['description']}",
-            f"- **Ideal para:** {audience(package)}",
+            f"- **Duración de {label}:** {days} días y {nights} noches",
+            f"- **Qué incluye {label}:** {package['description']}",
+            f"- **{label} es ideal para:** {audience(package)}",
             f"- **Tarifa base:** desde {format_cop(package['base_rate'])} COP por persona",
             f"- **Palabras clave:** {', '.join(package['tags'])}",
             f"- **Código del paquete:** {package['id']}",
@@ -105,7 +110,7 @@ def render() -> str:
         "",
     ]
     summary = [
-        f"- {p['destination']} ({p['duration_days']} días): desde "
+        f"- {p['destination']}: paquete {p['name']} ({p['duration_days']} días), desde "
         f"{format_cop(p['base_rate'])} COP por persona"
         for p in CATALOG
     ]
