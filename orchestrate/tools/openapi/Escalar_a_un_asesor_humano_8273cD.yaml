@@ -13,14 +13,14 @@ paths:
         is upset, or the request cannot be resolved. Include a short summary so the advisor does not have
         to ask again. traveler_id is optional: never wait for it. Tell the traveler the returned message.'
       requestBody:
+        required: true
         content:
           application/json:
             schema:
+              type: object
+              title: HandoffIn
+              description: The html request body used to satisfy this user utterance.
               properties:
-                traveler_id:
-                  type: string
-                  title: Traveler Id
-                  description: Traveler e-mail or mobile number, if known. Never wait for it to escalate.
                 reason:
                   type: string
                   title: Reason
@@ -29,24 +29,28 @@ paths:
                   type: string
                   title: Summary
                   description: Short summary of the conversation for the advisor.
-              type: object
+                traveler_id:
+                  type: string
+                  title: Traveler Id
+                  description: Traveler e-mail or mobile number, if known. Never wait for it to escalate.
               required:
               - reason
               - summary
-              title: HandoffIn
-        required: true
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
+                type: object
                 properties:
                   ok:
                     type: boolean
                     title: Ok
                     description: False when the request could not be fulfilled; see error.
                   error:
+                    type: object
+                    title: ErrorInfo
                     properties:
                       code:
                         type: string
@@ -56,14 +60,9 @@ paths:
                         type: string
                         title: Message
                         description: Short explanation in Spanish, safe to tell the traveler.
-                    type: object
                     required:
                     - code
                     - message
-                    title: ErrorInfo
-                  handoff_id:
-                    type: string
-                    title: Handoff Id
                   status:
                     type: string
                     title: Status
@@ -71,10 +70,9 @@ paths:
                     type: string
                     title: Message
                     description: What to tell the traveler.
-                type: object
-                required:
-                - ok
-                title: HandoffOut
+                  handoff_id:
+                    type: string
+                    title: Handoff Id
       security:
       - scheme0: []
       x-ibm-orchestrate-app-id: andes_tools_api
