@@ -16,6 +16,10 @@ tools:
 knowledge_bases:
   andes_catalog_kb: [Untitled_Agent_1_7981KD]
 
+# Plug-ins (deterministic hooks around an agent) and the agent hook they run on.
+plugins:
+  price_guard: {agent: Untitled_Agent_1_5717pu, hook: agent_post_invoke}
+
 # Catalog destinations (supabase/seed.sql). Nothing else is sold.
 destinations:
   - Eje Cafetero

@@ -76,6 +76,10 @@ class Repository(Protocol):
 
     async def find_reservation_by_key(self, idempotency_key: str) -> Reservation | None: ...
 
+    async def quoted_amounts(self, since: datetime) -> set[int]:
+        """Totals, line and unit amounts of every quote that expires after `since`."""
+        ...
+
     async def close(self) -> None: ...
 
 
@@ -138,6 +142,14 @@ class MemoryRepository:
     async def get_quote(self, quote_id: str) -> Quote | None:
         return self.quotes.get(quote_id)
 
+    async def quoted_amounts(self, since: datetime) -> set[int]:
+        return {
+            a
+            for q in self.quotes.values()
+            if q.expires_at >= since
+            for a in _quote_amounts(q.total_amount, q.lines)
+        }
+
     async def insert_reservation(self, reservation: Reservation) -> tuple[Reservation, bool]:
         for existing in self.reservations.values():
             if existing.idempotency_key == reservation.idempotency_key:
@@ -153,6 +165,13 @@ class MemoryRepository:
 
     async def close(self) -> None:
         return None
+
+
+def _quote_amounts(total: int, lines: list[dict]) -> set[int]:
+    out = {int(total)}
+    for line in lines:
+        out |= {int(line[k]) for k in ("amount", "unit_amount") if line.get(k) is not None}
+    return out
 
 
 def _reservation_brief(rid: str, package: Package, start: date, end: date) -> dict:
@@ -330,6 +349,19 @@ class PostgresRepository:
                     "exp": quote.expires_at,
                 },
             )
+
+    async def quoted_amounts(self, since: datetime) -> set[int]:
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(
+                text("select total_amount, lines from quotes where expires_at >= :since"),
+                {"since": since},
+            )
+            out: set[int] = set()
+            for total, lines in rows:
+                out |= _quote_amounts(
+                    total, lines if isinstance(lines, list) else json.loads(lines)
+                )
+            return out
 
     async def get_quote(self, quote_id: str) -> Quote | None:
         qid = _as_uuid(quote_id)

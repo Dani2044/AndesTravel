@@ -24,6 +24,8 @@ from andes.apps.tools_api.main import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
 UI_FILE = ROOT / "build" / "andes_tools_api.openapi.yaml"  # gitignored; for the Orchestrate UI
+PLUGIN_FILE = ROOT / "build" / "price_guard.openapi.yaml"  # gitignored; orchestrate tools import
+PLUGIN_EXT = "x-ibm-orchestrate-plugin"
 APP_ID = "andes_tools_api"
 APP_ID_EXT = "x-ibm-orchestrate-app-id"
 HEADER = "X-API-Key"
@@ -53,11 +55,17 @@ def _resolve(node: Any, components: dict[str, Any]) -> Any:
     return out
 
 
-def build_docs(spec: dict[str, Any], server_url: str) -> dict[str, dict[str, Any]]:
+def build_docs(
+    spec: dict[str, Any], server_url: str, plugins: bool = False
+) -> dict[str, dict[str, Any]]:
+    """One document per tool; with plugins=True, one per plug-in (operations that carry
+    x-ibm-orchestrate-plugin, which are imported apart and attached to an agent hook)."""
     components = spec.get("components", {}).get("schemas", {})
     docs: dict[str, dict[str, Any]] = {}
     for path, methods in spec["paths"].items():
         for method, op in methods.items():
+            if (PLUGIN_EXT in op) != plugins:
+                continue
             op_id = op["operationId"]
             operation: dict[str, Any] = {
                 "operationId": op_id,
@@ -72,6 +80,8 @@ def build_docs(spec: dict[str, Any], server_url: str) -> dict[str, dict[str, Any
                 operation["requestBody"] = _resolve(op["requestBody"], components)
             ok = op["responses"]["200"]
             operation["responses"] = {"200": _resolve(ok, components)}
+            if PLUGIN_EXT in op:
+                operation[PLUGIN_EXT] = op[PLUGIN_EXT]
             operation["security"] = [{"api_key": []}]
             operation[APP_ID_EXT] = APP_ID
             docs[op_id] = {
@@ -117,6 +127,9 @@ def main() -> int:
     docs = build_docs(spec, server_url)
     _dump(UI_FILE, combined(docs))
     print(f"wrote {len(docs)} operations to {UI_FILE.relative_to(ROOT)} (import it in the console)")
+    plugin = build_docs(spec, server_url, plugins=True)["price_guard"]
+    _dump(PLUGIN_FILE, plugin)
+    print(f"wrote the price_guard plug-in to {PLUGIN_FILE.relative_to(ROOT)}")
     return 0
 
 

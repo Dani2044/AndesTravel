@@ -176,3 +176,15 @@ class ReservationOut(Result):
     deduplicated: bool = Field(
         default=False, description="True when this key was already used; nothing new was booked."
     )
+
+
+class PluginIn(BaseModel):
+    """What watsonx Orchestrate sends to an OpenAPI plug-in."""
+
+    payload: dict = Field(description="The agent payload for this phase (messages, tool_calls).")
+    context: dict = Field(default_factory=dict, description="System, request and plug-in context.")
+
+
+class PluginOut(BaseModel):
+    continue_processing: bool = True
+    modified_payload: dict | None = None

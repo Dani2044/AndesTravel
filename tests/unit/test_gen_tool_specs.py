@@ -87,3 +87,13 @@ def test_combined_document_holds_every_operation(docs, gen):
     assert ops == set(EXPECTED)
     assert doc["servers"] == [{"url": URL}]
     assert "api_key" in doc["components"]["securitySchemes"]
+
+
+def test_plugins_are_split_from_tools(gen, docs):
+    from andes.apps.tools_api.main import create_app
+
+    plugins = gen.build_docs(create_app(api_key="x").openapi(), URL, plugins=True)
+    assert set(plugins) == {"price_guard"} and "price_guard" not in docs
+    op = plugins["price_guard"]["paths"]["/plugins/price_guard"]["post"]
+    assert op[gen.PLUGIN_EXT] == {"hook": "agent_post_invoke"}
+    assert op[gen.APP_ID_EXT] == gen.APP_ID and op["security"] == [{"api_key": []}]

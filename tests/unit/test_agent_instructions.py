@@ -44,3 +44,10 @@ def test_fixed_phrases_stay_in_the_instructions() -> None:
     for name, phrases in SCOPE["fixed_phrases"].items():
         for phrase in phrases:
             assert phrase in AGENTS[name]["instructions"], f"{name} lost: {phrase}"
+
+
+def test_plugins_are_attached_where_scope_says() -> None:
+    for plugin, where in SCOPE["plugins"].items():
+        hooks = AGENTS[where["agent"]].get("plugins") or {}
+        names = [p.get("plugin_name") for p in hooks.get(where["hook"]) or []]
+        assert plugin in names, f"{plugin} is not on {where['agent']} {where['hook']}"

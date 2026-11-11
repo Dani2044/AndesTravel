@@ -246,4 +246,5 @@ def test_openapi_operation_ids_are_tool_names(client: TestClient) -> None:
         "check_availability",
         "quote_package",
         "create_reservation",
+        "price_guard",
     }

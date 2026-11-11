@@ -9,17 +9,19 @@ Environment:
 from __future__ import annotations
 
 import hmac
+import json
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import APIKeyHeader
 
-from andes.apps.tools_api import logic
+from andes.apps.tools_api import logic, price_guard
 from andes.apps.tools_api.logic import DomainError
 from andes.apps.tools_api.repository import (
     MemoryRepository,
@@ -36,6 +38,8 @@ from andes.apps.tools_api.schemas import (
     HandoffOut,
     Money,
     PackageInfo,
+    PluginIn,
+    PluginOut,
     ProfileIn,
     ProfileOut,
     QuoteIn,
@@ -47,6 +51,10 @@ from andes.apps.tools_api.schemas import (
 )
 
 Clock = Callable[[], datetime]
+log = logging.getLogger("andes.price_guard")
+# Quotes whose amounts the answer may repeat: still valid, or expired in the last day
+# (a booking confirmation repeats the total of a quote that may have just expired).
+QUOTED_WINDOW = timedelta(hours=24)
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -384,6 +392,42 @@ def create_app(
             total=Money(amount=reservation.total_amount, currency=reservation.currency),
             deduplicated=not created,
         )
+
+    # ----------------------------------------------------------------- plug-ins
+
+    @app.post(
+        "/plugins/price_guard",
+        operation_id="price_guard",
+        summary="Guardia de precios",
+        description=(
+            "Post-invoke plug-in for the supervisor: replaces the answer when it shows an "
+            "amount that no stored quote and no tool call of this run backs."
+        ),
+        response_model=PluginOut,
+        response_model_exclude_none=True,
+        dependencies=auth,
+        openapi_extra={"x-ibm-orchestrate-plugin": {"hook": "agent_post_invoke"}},
+    )
+    async def price_guard_plugin(body: PluginIn, repo: Repo, at: Now) -> PluginOut:
+        shown = price_guard.amounts_in(price_guard.answer_text(body.payload))
+        if not shown:
+            if not price_guard.answer_text(body.payload):
+                # unknown payload format: change nothing, log its structure (no content)
+                log.warning(
+                    "price_guard: no answer text; shape=%s",
+                    json.dumps(price_guard.shape(body.payload))[:1500],
+                )
+            return PluginOut()
+        try:
+            quoted = await repo.quoted_amounts(at - QUOTED_WINDOW)
+        except Exception:  # cannot verify: do not let an amount through
+            log.exception("price_guard: could not load quoted amounts")
+            quoted = set()
+        missing = price_guard.unbacked(body.payload, quoted)
+        if not missing:
+            return PluginOut()
+        log.warning("price_guard: replaced an answer with %d unquoted amount(s)", len(missing))
+        return PluginOut(modified_payload=price_guard.replace_answer(body.payload))
 
     return app
 

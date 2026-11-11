@@ -72,7 +72,8 @@ toolkits: []
 skills: []
 plugins:
   agent_pre_invoke: []
-  agent_post_invoke: []
+  agent_post_invoke:
+  - plugin_name: price_guard
 sync_tool_flow_interactions: true
 bundled: false
 knowledge_base: []
