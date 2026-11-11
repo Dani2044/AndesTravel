@@ -11,6 +11,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from difflib import SequenceMatcher
 
 from andes.core.seed import COMMISSION_RATE
 
@@ -104,7 +105,28 @@ def match_package(query: str, packages: list[Package]) -> Package:
     named = [p for p in packages if fold(p.destination) in wanted or fold(p.name) in wanted]
     if len(named) == 1:
         return named[0]
+    # LLMs mistype names in tool arguments ("Taybola" for Tayrona): accept a close spelling
+    # of exactly one destination or package name, never a different place ("Marte").
+    scored = sorted(
+        (
+            (max(_similar(wanted, fold(p.destination)), _similar(wanted, fold(p.name))), p)
+            for p in packages
+        ),
+        key=lambda sp: sp[0],
+        reverse=True,
+    )
+    best, runner_up = scored[0], scored[1] if len(scored) > 1 else (0.0, None)
+    if best[0] >= FUZZY_MIN and best[0] - runner_up[0] >= FUZZY_MARGIN:
+        return best[1]
     raise DomainError("unknown_package", "No tenemos ese destino en nuestro catálogo.")
+
+
+FUZZY_MIN = 0.7  # "taybola" vs "tayrona" scores 0.71; "marte" vs any destination < 0.6
+FUZZY_MARGIN = 0.1
+
+
+def _similar(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
 
 
 def local_today(now: datetime) -> date:
@@ -125,11 +147,20 @@ class Trip:
         return (self.end - self.start).days
 
 
-def parse_trip(start_date: str, end_date: str, today: date) -> Trip:
-    """Validate a trip window. Raises ``invalid_dates`` with a reason the agent can say."""
+def parse_trip(start_date: str, end_date: str | None, today: date, days: int | None = None) -> Trip:
+    """Validate a trip window. Raises ``invalid_dates`` with a reason the agent can say.
+
+    Without an end_date the trip lasts `days` (the package length): the return date is
+    departure + days - 1, so the agent never has to work it out.
+    """
     try:
         start = date.fromisoformat((start_date or "").strip())
-        end = date.fromisoformat((end_date or "").strip())
+        if (end_date or "").strip():
+            end = date.fromisoformat((end_date or "").strip())
+        elif days:
+            end = start + timedelta(days=days - 1)
+        else:
+            raise ValueError("no end date")
     except ValueError as exc:
         raise DomainError("invalid_dates", "Necesito una fecha válida (AAAA-MM-DD).") from exc
     if start < today:

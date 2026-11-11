@@ -52,9 +52,10 @@ from andes.apps.tools_api.schemas import (
 
 Clock = Callable[[], datetime]
 log = logging.getLogger("andes.price_guard")
-# Quotes whose amounts the answer may repeat: still valid, or expired in the last day
-# (a booking confirmation repeats the total of a quote that may have just expired).
-QUOTED_WINDOW = timedelta(hours=24)
+# Quotes whose amounts the answer may repeat: still valid or expired within the last hour
+# (created in the last ~2 hours), so a booking confirmation can repeat its total. The
+# plug-in does not know the traveler, so a short window limits cross-traveler matches.
+QUOTED_WINDOW = timedelta(hours=1)
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -150,7 +151,7 @@ def create_app(
         return TravelerContext(
             ok=True,
             traveler_id=tid,
-            known_traveler=profile is not None or bool(reservations),
+            known_traveler=consented or bool(reservations),
             consent_personalization=consented,
             persona_prompt=profile.persona_prompt if consented and profile else None,
             attributes=profile.attributes if consented and profile else {},
@@ -182,16 +183,10 @@ def create_app(
         except DomainError as exc:
             return _fail(ProfileOut, exc)
         if not body.consent_personalization:
-            await repo.save_profile(Profile(traveler_id=tid, consent_personalization=False))
-            return ProfileOut(
-                ok=False,
-                traveler_id=tid,
-                stored=False,
-                error=ErrorInfo(
-                    code="consent_required",
-                    message="Sin autorización no guardamos preferencias; borramos las anteriores.",
-                ),
-            )
+            # Without consent nothing is kept: erase any stored profile and create no row
+            # (a refusal must not make the traveler "known").
+            await repo.delete_profile(tid)
+            return ProfileOut(ok=True, traveler_id=tid, stored=False, erased=True)
         previous = await repo.get_profile(tid)
         consent_at = (
             previous.consent_at
@@ -222,16 +217,19 @@ def create_app(
         description=(
             "Register a hand-off to a human travel advisor when the traveler asks for a "
             "person, is upset, or the request cannot be resolved. Include a short summary "
-            "so the advisor does not have to ask again."
+            "so the advisor does not have to ask again. traveler_id is optional: never wait "
+            "for it. Tell the traveler the returned message."
         ),
         response_model=HandoffOut,
         dependencies=auth,
     )
     async def escalate_to_human(body: HandoffIn, repo: Repo) -> HandoffOut:
+        # Escalate even without (or with a malformed) traveler id: an upset traveler must
+        # not be asked for an e-mail first. The id is kept only when it is valid.
         try:
-            tid = logic.normalize_traveler_id(body.traveler_id)
-        except DomainError as exc:
-            return _fail(HandoffOut, exc)
+            tid = logic.normalize_traveler_id(body.traveler_id) if body.traveler_id else None
+        except DomainError:
+            tid = None
         summary = " ".join(body.summary.split())[:2000]
         handoff_id = await repo.create_handoff(tid, body.reason.strip()[:100], summary)
         return HandoffOut(
@@ -239,8 +237,10 @@ def create_app(
             handoff_id=handoff_id,
             status="queued",
             message=(
-                "Un asesor de Andes Travel te contactará pronto por este mismo medio, "
-                "con el resumen de esta conversación."
+                "Listo, pasé tu caso a un asesor de Andes Travel con el resumen de esta "
+                "conversación. Atendemos de lunes a viernes de 8:00 a. m. a 6:00 p. m. y "
+                "sábados de 9:00 a. m. a 1:00 p. m. (hora de Colombia)."
+                + ("" if tid else " Si quieres que te contacten, compárteme tu correo o celular.")
             ),
         )
 
@@ -252,10 +252,10 @@ def create_app(
         summary="Consultar disponibilidad",
         description=(
             "Check whether a package can be sold for the given dates and number of "
-            "travelers, and its rate per person. Packages have a fixed length: the return "
-            "date must be departure + duration_days - 1, otherwise it fails with "
-            "invalid_duration and a message with the right return date. Call it before "
-            "quote_package."
+            "travelers. Packages have a fixed length: leave end_date out and the package "
+            "length sets it; a different end_date fails with invalid_duration and a message "
+            "with the right return date. quote_package runs the same checks, so it can be "
+            "called directly."
         ),
         response_model=AvailabilityOut,
         dependencies=auth,
@@ -265,12 +265,15 @@ def create_app(
         at: Now,
         package: Annotated[str, Query(description="Package id, name or destination.")],
         start_date: Annotated[str, Query(description="Departure date, YYYY-MM-DD.")],
-        end_date: Annotated[str, Query(description="Return date, YYYY-MM-DD.")],
         travelers: Annotated[int, Query(description="Number of travelers (1-20).")],
+        end_date: Annotated[
+            str | None,
+            Query(description="Return date, YYYY-MM-DD. Leave it out to use the package length."),
+        ] = None,
     ) -> AvailabilityOut:
         try:
             pkg = logic.match_package(package, await repo.list_packages())
-            trip = logic.parse_trip(start_date, end_date, logic.local_today(at))
+            trip = logic.parse_trip(start_date, end_date, logic.local_today(at), pkg.duration_days)
             logic.check_duration(pkg, trip)
             logic.check_travelers(travelers)
         except DomainError as exc:
@@ -288,8 +291,9 @@ def create_app(
         operation_id="quote_package",
         summary="Cotizar paquete",
         description=(
-            "Create an itemized quote for a package, dates and number of travelers. The "
-            "rate and the optional insurance are per person. Present only the lines, "
+            "Create an itemized quote for a package, departure date and number of travelers. "
+            "Leave end_date out unless the traveler gave one: the package length sets it. "
+            "The rate and the optional insurance are per person. Present only the lines, "
             "total and expiry returned here; never estimate prices."
         ),
         response_model=QuoteOut,
@@ -299,7 +303,9 @@ def create_app(
         try:
             tid = logic.normalize_traveler_id(body.traveler_id)
             pkg = logic.match_package(body.package, await repo.list_packages())
-            trip = logic.parse_trip(body.start_date, body.end_date, logic.local_today(at))
+            trip = logic.parse_trip(
+                body.start_date, body.end_date, logic.local_today(at), pkg.duration_days
+            )
             logic.check_duration(pkg, trip)
             n = logic.check_travelers(body.travelers)
         except DomainError as exc:
@@ -328,8 +334,8 @@ def create_app(
         description=(
             "Book a quote the traveler explicitly accepted. Fails with quote_expired when "
             "the quote is past its expiry and with quote_not_found when the quote does not "
-            "exist for this traveler. Reusing an idempotency_key never creates a second "
-            "booking."
+            "exist for this traveler. A quote is booked at most once: a retry returns the same "
+            "booking (deduplicated=true)."
         ),
         response_model=ReservationOut,
         dependencies=auth,
@@ -339,18 +345,15 @@ def create_app(
             tid = logic.normalize_traveler_id(body.traveler_id)
         except DomainError as exc:
             return _fail(ReservationOut, exc)
-        key = body.idempotency_key.strip()
-        if not key:
-            return _fail(
-                ReservationOut,
-                DomainError("idempotency_key_required", "Falta la llave de idempotencia."),
-            )
         quote = await repo.get_quote(body.quote_id.strip())
         if quote is None or quote.traveler_id != tid:
             return _fail(
                 ReservationOut,
                 DomainError("quote_not_found", "No encontré esa cotización para este viajero."),
             )
+        # The key is derived here, never by the agent: one quote can only be booked once,
+        # and any retry returns the same booking.
+        key = f"res-{quote.quote_id}"
         candidate = Reservation(
             reservation_id=str(uuid.uuid4()),
             traveler_id=tid,
@@ -363,7 +366,7 @@ def create_app(
         )
         if quote.expires_at < at:
             # A retry of a booking made before expiry must still return that booking.
-            existing = await repo.find_reservation_by_key(key)
+            existing = await repo.find_reservation_for_quote(quote.quote_id)
             if existing is None:
                 return _fail(
                     ReservationOut,
@@ -401,7 +404,7 @@ def create_app(
         summary="Guardia de precios",
         description=(
             "Post-invoke plug-in for the supervisor: replaces the answer when it shows an "
-            "amount that no stored quote and no tool call of this run backs."
+            "amount that no recent stored quote backs."
         ),
         response_model=PluginOut,
         response_model_exclude_none=True,

@@ -49,8 +49,7 @@ y se le pueden sugerir paquetes nacionales del catálogo.
   paquete.
 - Cubre asistencia médica durante el viaje, pérdida de equipaje y cancelación por
   enfermedad o calamidad doméstica comprobada.
-- Su valor aproximado es el 5 % del valor del paquete y se muestra en la cotización cuando
-  el viajero lo pide.
+- Cuesta 180.000 COP por persona y se suma a la cotización solo cuando el viajero lo pide.
 
 ## Horario de atención de asesores
 

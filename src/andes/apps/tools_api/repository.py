@@ -64,7 +64,7 @@ class Repository(Protocol):
 
     async def recent_reservations(self, traveler_id: str, limit: int = 3) -> list[dict]: ...
 
-    async def create_handoff(self, traveler_id: str, reason: str, summary: str) -> str: ...
+    async def create_handoff(self, traveler_id: str | None, reason: str, summary: str) -> str: ...
 
     async def save_quote(self, quote: Quote) -> None: ...
 
@@ -75,6 +75,12 @@ class Repository(Protocol):
         ...
 
     async def find_reservation_by_key(self, idempotency_key: str) -> Reservation | None: ...
+
+    async def find_reservation_for_quote(self, quote_id: str) -> Reservation | None: ...
+
+    async def delete_profile(self, traveler_id: str) -> None:
+        """Erase the stored profile (consent denied or withdrawn); creates nothing."""
+        ...
 
     async def quoted_amounts(self, since: datetime) -> set[int]:
         """Totals, line and unit amounts of every quote that expires after `since`."""
@@ -118,6 +124,9 @@ class MemoryRepository:
     async def save_profile(self, profile: Profile) -> None:
         self.profiles[profile.traveler_id] = profile
 
+    async def delete_profile(self, traveler_id: str) -> None:
+        self.profiles.pop(traveler_id, None)
+
     async def recent_reservations(self, traveler_id: str, limit: int = 3) -> list[dict]:
         out = []
         for r in reversed(list(self.reservations.values())):
@@ -129,7 +138,7 @@ class MemoryRepository:
                 break
         return out
 
-    async def create_handoff(self, traveler_id: str, reason: str, summary: str) -> str:
+    async def create_handoff(self, traveler_id: str | None, reason: str, summary: str) -> str:
         handoff_id = str(uuid.uuid4())
         self.handoffs.append(
             {"id": handoff_id, "traveler_id": traveler_id, "reason": reason, "summary": summary}
@@ -152,7 +161,10 @@ class MemoryRepository:
 
     async def insert_reservation(self, reservation: Reservation) -> tuple[Reservation, bool]:
         for existing in self.reservations.values():
-            if existing.idempotency_key == reservation.idempotency_key:
+            if (
+                existing.idempotency_key == reservation.idempotency_key
+                or existing.quote_id == reservation.quote_id
+            ):
                 return existing, False
         self.reservations[reservation.reservation_id] = reservation
         return reservation, True
@@ -160,6 +172,12 @@ class MemoryRepository:
     async def find_reservation_by_key(self, idempotency_key: str) -> Reservation | None:
         for existing in self.reservations.values():
             if existing.idempotency_key == idempotency_key:
+                return existing
+        return None
+
+    async def find_reservation_for_quote(self, quote_id: str) -> Reservation | None:
+        for existing in self.reservations.values():
+            if existing.quote_id == quote_id:
                 return existing
         return None
 
@@ -308,13 +326,14 @@ class PostgresRepository:
             out.append(_reservation_brief(str(r.id), package, r.start_date, r.end_date))
         return out
 
-    async def create_handoff(self, traveler_id: str, reason: str, summary: str) -> str:
+    async def create_handoff(self, traveler_id: str | None, reason: str, summary: str) -> str:
         handoff_id = uuid.uuid4()
         async with self.engine.begin() as conn:
-            await conn.execute(
-                text("insert into travelers (id) values (:tid) on conflict (id) do nothing"),
-                {"tid": traveler_id},
-            )
+            if traveler_id:
+                await conn.execute(
+                    text("insert into travelers (id) values (:tid) on conflict (id) do nothing"),
+                    {"tid": traveler_id},
+                )
             await conn.execute(
                 text(
                     "insert into handoffs (id, traveler_id, reason, summary) "
@@ -411,28 +430,37 @@ class PostgresRepository:
                         "insert into reservations (id, traveler_id, quote_id, idempotency_key, "
                         "status, total_amount, currency, commission_amount) values (:id, :tid, "
                         ":qid, :key, :status, :total, :cur, :commission) "
-                        "on conflict (idempotency_key) do nothing returning id"
+                        "on conflict do nothing returning id"
                     ),
                     params,
                 )
             ).first()
         if created is not None:
             return reservation, True
-        existing = await self.find_reservation_by_key(reservation.idempotency_key)
+        # one booking per quote (unique quote_id) and per key (unique idempotency_key)
+        existing = await self.find_reservation_for_quote(
+            reservation.quote_id
+        ) or await self.find_reservation_by_key(reservation.idempotency_key)
         if existing is None:  # pragma: no cover - conflict row vanished (deleted concurrently)
             raise RuntimeError("idempotency conflict without a stored reservation")
         return existing, False
 
     async def find_reservation_by_key(self, idempotency_key: str) -> Reservation | None:
+        return await self._find_reservation("idempotency_key = :v", idempotency_key)
+
+    async def find_reservation_for_quote(self, quote_id: str) -> Reservation | None:
+        qid = _as_uuid(quote_id)
+        return await self._find_reservation("quote_id = :v", qid) if qid else None
+
+    async def _find_reservation(self, where: str, value: object) -> Reservation | None:
         async with self.engine.connect() as conn:
             row = (
                 await conn.execute(
                     text(
                         "select id, traveler_id, quote_id, idempotency_key, status, total_amount, "
-                        "currency, commission_amount from reservations "
-                        "where idempotency_key = :key"
+                        "currency, commission_amount from reservations where " + where
                     ),
-                    {"key": idempotency_key},
+                    {"v": value},
                 )
             ).first()
         if row is None:
@@ -447,6 +475,12 @@ class PostgresRepository:
             currency=row.currency,
             commission_amount=int(row.commission_amount),
         )
+
+    async def delete_profile(self, traveler_id: str) -> None:
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text("delete from traveler_profiles where traveler_id = :tid"), {"tid": traveler_id}
+            )
 
     async def close(self) -> None:
         await self.engine.dispose()

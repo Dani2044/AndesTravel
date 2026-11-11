@@ -44,11 +44,12 @@ def test_amounts_in(text: str, amounts: set[int]) -> None:
     assert pg.amounts_in(text) == amounts
 
 
-def test_unbacked_and_tool_calls() -> None:
+def test_unbacked_trusts_only_stored_quotes() -> None:
     assert pg.unbacked(_payload("Total 5.600.000 COP"), {5_600_000}) == set()
     assert pg.unbacked(_payload("Total 12.600.000 COP"), {5_600_000}) == {12_600_000}
-    calls = [{"name": "cotizar_paquete", "result": '{"total": {"amount": 12600000}}'}]
-    assert pg.unbacked(_payload("Total 12.600.000 COP", calls), set()) == set()
+    # knowledge-base text or LLM-written arguments in tool_calls never back a price
+    kb = [{"name": "andes_catalog_kb", "result": "desde 6.500.000 COP por persona"}]
+    assert pg.unbacked(_payload("Desde 6.500.000 COP", kb), set()) == {6_500_000}
     assert pg.unbacked(_payload("Sin precios aquí"), set()) == set()
 
 

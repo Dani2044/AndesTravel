@@ -2,8 +2,9 @@
 
 watsonx Orchestrate calls POST /plugins/price_guard after the agent writes its answer
 and before the traveler sees it (an `agent_post_invoke` plug-in). Every amount in the
-answer must be an amount of a stored quote (total, line or unit price) or appear in the
-tool calls of this run; otherwise the answer is replaced with SAFE_MESSAGE.
+answer must be an amount of a recent stored quote (total, line or unit price); otherwise
+the answer is replaced with SAFE_MESSAGE. Tool calls are not trusted: they can carry
+knowledge-base text ("desde 6.500.000 COP") or arguments the LLM wrote itself.
 
 Everything here is pure: the route in main.py loads the quoted amounts and logs only the
 payload's structure (keys and sizes), never the conversation.
@@ -12,7 +13,6 @@ payload's structure (keys and sizes), never the conversation.
 from __future__ import annotations
 
 import copy
-import json
 import re
 from typing import Any
 
@@ -41,33 +41,6 @@ def amounts_in(text: str) -> set[int]:
     for m in _PLAIN_MONEY.finditer(text):
         found.add(int(m[1] or m[2]))
     return {a for a in found if a >= MIN_AMOUNT}
-
-
-def numbers_in(node: Any) -> set[int]:
-    """Every integer (or integer-looking text) inside tool calls, at any depth."""
-    out: set[int] = set()
-    if isinstance(node, bool):
-        return out
-    if isinstance(node, int):
-        out.add(node)
-    elif isinstance(node, float) and node.is_integer():
-        out.add(int(node))
-    elif isinstance(node, str):
-        stripped = node.strip()
-        if stripped[:1] in "{[":
-            try:
-                return numbers_in(json.loads(stripped))
-            except ValueError:
-                pass
-        out |= amounts_in(node)
-        out |= {int(n) for n in re.findall(r"\b\d{5,}\b", node)}
-    elif isinstance(node, dict):
-        for v in node.values():
-            out |= numbers_in(v)
-    elif isinstance(node, list):
-        for v in node:
-            out |= numbers_in(v)
-    return {n for n in out if n >= MIN_AMOUNT}
 
 
 def _texts(content: Any) -> list[str]:
@@ -105,11 +78,8 @@ def shape(node: Any, depth: int = 0) -> Any:
 
 
 def unbacked(payload: dict[str, Any], quoted: set[int]) -> set[int]:
-    """Amounts in the answer that no stored quote and no tool call of this run backs."""
-    shown = amounts_in(answer_text(payload))
-    if not shown:
-        return set()
-    return shown - quoted - numbers_in(payload.get("tool_calls"))
+    """Amounts in the answer that no recent stored quote backs."""
+    return amounts_in(answer_text(payload)) - quoted
 
 
 def replace_answer(payload: dict[str, Any], text: str = SAFE_MESSAGE) -> dict[str, Any]:

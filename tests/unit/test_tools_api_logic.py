@@ -41,11 +41,34 @@ def test_match_package_by_id_name_or_destination(query: str) -> None:
     assert logic.match_package(query, catalog_packages()).destination == "San Andrés"
 
 
-@pytest.mark.parametrize("query", ["Atlántida", "Marte", "", "Paris"])
+@pytest.mark.parametrize(
+    ("query", "destination"),
+    [
+        ("Taybola", "Tayrona"),
+        ("tairona", "Tayrona"),
+        ("cartajena", "Cartagena"),
+        ("medelin", "Medellín"),
+        ("Cano Cristales", "Caño Cristales"),
+    ],
+)
+def test_match_package_tolerates_typos(query: str, destination: str) -> None:
+    assert logic.match_package(query, catalog_packages()).destination == destination
+
+
+@pytest.mark.parametrize(
+    "query", ["Atlántida", "Marte", "", "Paris", "París", "Machu Picchu", "Cancún", "Santa Marta"]
+)
 def test_match_package_unknown(query: str) -> None:
     with pytest.raises(DomainError) as err:
         logic.match_package(query, catalog_packages())
     assert err.value.code == "unknown_package"
+
+
+def test_parse_trip_without_end_uses_package_days() -> None:
+    trip = logic.parse_trip("2026-12-01", None, TODAY, days=4)
+    assert trip.end.isoformat() == "2026-12-04"
+    with pytest.raises(DomainError):
+        logic.parse_trip("2026-12-01", "", TODAY)  # no end and no package length
 
 
 def test_parse_trip_ok() -> None:

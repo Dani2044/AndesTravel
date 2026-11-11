@@ -82,7 +82,13 @@ def test_profile_roundtrip_with_consent(client: TestClient) -> None:
         },
         headers=H,
     ).json()
-    assert put == {"ok": True, "error": None, "traveler_id": "+573001234567", "stored": True}
+    assert put == {
+        "ok": True,
+        "error": None,
+        "traveler_id": "+573001234567",
+        "stored": True,
+        "erased": False,
+    }
     ctx = client.get("/travelers/+573001234567/context", headers=H).json()
     assert ctx["consent_personalization"] is True
     assert ctx["persona_prompt"] == "Viaja en pareja, prefiere playa y descanso."
@@ -112,9 +118,24 @@ def test_profile_without_consent_is_not_stored_and_erases(client: TestClient) ->
         json={"consent_personalization": False, "persona_prompt": "otra cosa"},
         headers=H,
     ).json()
-    assert revoke["ok"] is False and revoke["error"]["code"] == "consent_required"
+    assert revoke["ok"] is True and revoke["erased"] is True and revoke["stored"] is False
     ctx = client.get("/travelers/ana@example.com/context", headers=H).json()
     assert ctx["persona_prompt"] is None and ctx["attributes"] == {}
+    assert ctx["known_traveler"] is False
+
+
+def test_refusing_consent_creates_no_traveler(client: TestClient) -> None:
+    """A "no" must not store the e-mail nor make the traveler look known next time."""
+    out = client.put(
+        "/travelers/nuevo@example.com/profile",
+        json={"consent_personalization": False},
+        headers=H,
+    ).json()
+    assert out["ok"] and out["erased"] and not out["stored"]
+    repo = client.app.state.repo
+    assert "nuevo@example.com" not in repo.profiles
+    ctx = client.get("/travelers/nuevo@example.com/context", headers=H).json()
+    assert ctx["known_traveler"] is False
 
 
 def test_availability_and_domain_errors(client: TestClient) -> None:
@@ -215,12 +236,48 @@ def test_retry_after_expiry_returns_original_booking(client: TestClient, clock: 
     assert retry["deduplicated"]
 
 
-def test_idempotency_key_cannot_be_reused_for_another_quote(client: TestClient) -> None:
+def test_one_booking_per_quote_whatever_key_the_agent_sends(client: TestClient) -> None:
+    """The key is derived server-side: two "different" keys still book the quote once,
+    and the same client key on two quotes books both (it is ignored)."""
     q1, q2 = _quote(client), _quote(client, package="Bogotá", end_date="2026-12-12")
-    base = {"traveler_id": "ana@example.com", "idempotency_key": "same"}
-    client.post("/reservations", json={**base, "quote_id": q1["quote_id"]}, headers=H)
-    second = client.post("/reservations", json={**base, "quote_id": q2["quote_id"]}, headers=H)
-    assert second.json()["error"]["code"] == "idempotency_conflict"
+    tid = {"traveler_id": "ana@example.com"}
+    a = client.post(
+        "/reservations", json={**tid, "quote_id": q1["quote_id"], "idempotency_key": "x"}, headers=H
+    ).json()
+    b = client.post(
+        "/reservations", json={**tid, "quote_id": q1["quote_id"], "idempotency_key": "y"}, headers=H
+    ).json()
+    c = client.post("/reservations", json={**tid, "quote_id": q2["quote_id"]}, headers=H).json()
+    assert a["ok"] and not a["deduplicated"]
+    assert b["reservation_id"] == a["reservation_id"] and b["deduplicated"]
+    assert c["ok"] and c["reservation_id"] != a["reservation_id"]
+    keys = {r.idempotency_key for r in client.app.state.repo.reservations.values()}
+    assert keys == {f"res-{q1['quote_id']}", f"res-{q2['quote_id']}"}
+
+
+def test_quote_without_end_date_uses_the_package_length(client: TestClient) -> None:
+    q = _quote(client, package="Taybola", start_date="2026-12-10", end_date=None, travelers=3)
+    assert q["ok"] and q["package"]["destination"] == "Tayrona"
+    assert q["end_date"] == "2026-12-13" and q["total"]["amount"] == (3_900_000 + 180_000) * 3
+    a = client.get(
+        "/availability",
+        params={"package": "tairona", "start_date": "2026-12-10", "travelers": 2},
+        headers=H,
+    ).json()
+    assert a["ok"] and a["nights"] == 3
+
+
+def test_handoff_without_traveler_id(client: TestClient) -> None:
+    out = client.post(
+        "/handoffs", json={"reason": "upset", "summary": "Molesto, pide una persona."}, headers=H
+    ).json()
+    assert out["ok"] and out["status"] == "queued" and "correo o celular" in out["message"]
+    bad = client.post(
+        "/handoffs",
+        json={"traveler_id": "", "reason": "upset", "summary": "x"},
+        headers=H,
+    ).json()
+    assert bad["ok"]
 
 
 def test_handoff(client: TestClient) -> None:

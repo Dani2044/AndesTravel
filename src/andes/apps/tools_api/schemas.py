@@ -79,6 +79,9 @@ class ProfileIn(BaseModel):
 class ProfileOut(Result):
     traveler_id: str | None = None
     stored: bool = Field(default=False, description="True when the profile was saved.")
+    erased: bool = Field(
+        default=False, description="True when consent was denied and any stored profile is gone."
+    )
 
 
 class TravelerContext(Result):
@@ -101,7 +104,10 @@ class TravelerContext(Result):
 
 
 class HandoffIn(BaseModel):
-    traveler_id: str = Field(description="Traveler e-mail or mobile number.")
+    traveler_id: str | None = Field(
+        default=None,
+        description="Traveler e-mail or mobile number, if known. Never wait for it to escalate.",
+    )
     reason: str = Field(description="Why a human is needed, e.g. asked_for_human, upset.")
     summary: str = Field(description="Short summary of the conversation for the advisor.")
 
@@ -126,7 +132,13 @@ class QuoteIn(BaseModel):
     traveler_id: str = Field(description="Traveler e-mail or mobile number.")
     package: str = Field(description="Package id, package name or destination name.")
     start_date: str = Field(description="Departure date, YYYY-MM-DD.")
-    end_date: str = Field(description="Return date, YYYY-MM-DD.")
+    end_date: str | None = Field(
+        default=None,
+        description=(
+            "Return date, YYYY-MM-DD. Leave it out when the traveler gave no return date: "
+            "the package length sets it."
+        ),
+    )
     travelers: int = Field(description="Number of travelers (1-20).")
     include_insurance: bool = Field(
         default=False, description="Add travel insurance (priced per person)."
@@ -156,11 +168,9 @@ class QuoteOut(Result):
 class ReservationIn(BaseModel):
     traveler_id: str = Field(description="Traveler e-mail or mobile number.")
     quote_id: str = Field(description="The quote the traveler explicitly accepted.")
-    idempotency_key: str = Field(
-        description=(
-            "One key per confirmed booking intent; reuse the same key on retries so the "
-            "reservation is never duplicated."
-        )
+    idempotency_key: str | None = Field(
+        default=None,
+        description="Ignored: the server derives it from quote_id (res-<quote_id>).",
     )
 
 
