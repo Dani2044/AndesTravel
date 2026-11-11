@@ -1,0 +1,62 @@
+{
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo. Tu correo es test+golden-02@andes.test. Quieres ir a Tayrona saliendo mañana y hacer el paquete completo; no sabes la fecha de regreso, si te la piden dices que la que corresponda al paquete. Viajan 3 personas contándote. No quieres guardar preferencias ni reservar, solo la cotización.",
+  "starting_sentence": "Buenas, ¿cuánto me sale ir a Tayrona saliendo mañana?",
+  "goals": {
+    "contexto": [
+      "cotizar"
+    ],
+    "cotizar": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-02@andes.test"
+      }
+    },
+    {
+      "name": "cotizar",
+      "type": "tool_call",
+      "tool_name": "cotizar_paquete",
+      "args": {
+        "traveler_id": "test+golden-02@andes.test",
+        "package": "x",
+        "start_date": "{d+1}",
+        "end_date": "{d+4}",
+        "travelers": 3,
+        "include_insurance": false
+      },
+      "arg_matching": {
+        "package": "ignore",
+        "include_insurance": "ignore",
+        "end_date": "optional"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Cotización del paquete de Tayrona para 3 personas con regreso según la duración del paquete, válida por 60 minutos.",
+      "keywords": [
+        "Tayrona"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [
+      {
+        "start_date": "{d+1}",
+        "end_date": "{d+4}",
+        "travelers": 3,
+        "total": 11700000
+      }
+    ],
+    "reservations": 0,
+    "profile": null
+  }
+}

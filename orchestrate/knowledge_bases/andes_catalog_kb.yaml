@@ -1,9 +1,13 @@
 spec_version: v1
 kind: knowledge_base
-name: knowledge_agent_2_4375oE
-description: knowledge agent 2
+name: andes_catalog_kb
+description: |-
+  Catálogo de paquetes turísticos nacionales de Andes Travel por Colombia (destino,
+  duración, qué incluye, para quién es ideal y tarifa base por persona en COP) y las
+  políticas de la agencia: cancelación, seguro de viaje opcional, productos que no vende,
+  vencimiento de cotizaciones, pagos y horario de asesores.
 vector_index:
-  embeddings_model_name: ibm/slate-125m-english-rtrvr-v2
+  embeddings_model_name: ibm/granite-embedding-278m-multilingual
   chunk_size: 400
   chunk_overlap: 50
   extraction_strategy: standard
@@ -14,10 +18,10 @@ conversational_search_tool:
     prompt_instruction: ''
     max_docs_passed_to_llm: 5
     generated_response_length: Moderate
-    display_text_no_results_found: I searched my knowledge base, but did not find
-      anything related to your query
-    display_text_connectivity_issue: I might have information related to your query
-      to share, but am unable to connect to my knowledge base at the moment
+    display_text_no_results_found: I searched my knowledge base, but did not find anything related to
+      your query
+    display_text_connectivity_issue: I might have information related to your query to share, but am unable
+      to connect to my knowledge base at the moment
     idk_message: I'm afraid I don't understand. Please rephrase your question.
     enabled: false
   query_rewrite:
@@ -37,4 +41,6 @@ conversational_search_tool:
   supports_full_document: false
 prioritize_built_in_index: true
 representation: tool
-documents: []
+documents:
+- docs/catalogo.md
+- docs/politicas_faq.md

@@ -1,0 +1,46 @@
+{
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo e indeciso. Tu correo es test+golden-05@andes.test. Quieres algo de naturaleza pero no sabes dónde; primero dices que quizás playa, luego cambias de idea y dices que mejor selva o ríos. No das fechas ni número de personas aunque te pregunten: solo quieres ideas. Si te preguntan si pueden guardar tus preferencias, dices que no.",
+  "starting_sentence": "Quiero una experiencia en la naturaleza, sugiéreme algo",
+  "goals": {
+    "contexto": [
+      "recommendation_agent"
+    ],
+    "recommendation_agent": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-05@andes.test"
+      }
+    },
+    {
+      "name": "recommendation_agent",
+      "type": "tool_call",
+      "tool_name": "chat_with_collaborator_recommendation_agent",
+      "args": {
+        "message": "x"
+      },
+      "arg_matching": {
+        "message": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Recomienda paquetes de naturaleza del catálogo, como Amazonía o Caño Cristales, sin precios.",
+      "keywords": []
+    }
+  ],
+  "x_db": {
+    "quotes": [],
+    "reservations": 0,
+    "profile": null
+  }
+}

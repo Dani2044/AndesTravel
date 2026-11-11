@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: Contexto del viajero
+  version: 1.0.0
+servers:
+- url: https://andes-tools-api.onrender.com
+paths:
+  /travelers/{traveler_id}/context:
+    get:
+      operationId: Contexto_del_viajero_7585Oc
+      summary: Contexto del viajero
+      description: Look up a returning traveler by e-mail or mobile number. Call it once at the start
+        of the conversation, after the traveler gives their e-mail or phone. Returns the personalization
+        summary (persona_prompt) and preferences only if the traveler consented, plus their recent bookings,
+        and today's date in Colombia (today), to resolve relative dates such as 'este año' or 'el próximo
+        mes'.
+      parameters:
+      - name: traveler_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    title: Ok
+                    description: False when the request could not be fulfilled; see error.
+                  error:
+                    type: object
+                    title: ErrorInfo
+                    properties:
+                      code:
+                        type: string
+                        title: Code
+                        description: Stable error code, e.g. unknown_package, invalid_dates.
+                      message:
+                        type: string
+                        title: Message
+                        description: Short explanation in Spanish, safe to tell the traveler.
+                    required:
+                    - code
+                    - message
+                  today:
+                    type: string
+                    title: Today
+                    description: Today's date in Colombia (YYYY-MM-DD). Trip dates must be after it.
+                  attributes:
+                    type: object
+                    title: Attributes
+                    additionalProperties: true
+                  traveler_id:
+                    type: string
+                    title: Traveler Id
+                  known_traveler:
+                    type: boolean
+                    title: Known Traveler
+                    description: True if Andes Travel has data for this traveler.
+                    default: false
+                  persona_prompt:
+                    type: string
+                    title: Persona Prompt
+                    description: Personalization summary; use it to tailor the conversation.
+                  recent_reservations:
+                    type: array
+                    title: Recent Reservations
+                    description: Up to 3 recent bookings (destination and dates).
+                    items:
+                      type: object
+                      additionalProperties: true
+                  consent_personalization:
+                    type: boolean
+                    title: Consent Personalization
+                    default: false
+      security:
+      - scheme0: []
+      x-ibm-orchestrate-app-id: andes_tools_api
+components:
+  securitySchemes:
+    scheme0:
+      type: apiKey
+      in: header
+      name: X-API-Key

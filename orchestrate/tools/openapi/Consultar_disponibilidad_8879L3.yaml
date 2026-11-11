@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Consultar disponibilidad
+  version: 1.0.0
+servers:
+- url: https://andes-tools-api.onrender.com
+paths:
+  /availability:
+    get:
+      operationId: Consultar_disponibilidad_8879L3
+      summary: Consultar disponibilidad
+      description: 'Check whether a package can be sold for the given dates and number of travelers. Packages
+        have a fixed length: leave end_date out and the package length sets it; a different end_date fails
+        with invalid_duration and a message with the right return date. quote_package runs the same checks,
+        so it can be called directly.'
+      parameters:
+      - name: package
+        in: query
+        required: true
+        description: Package id, name or destination.
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: false
+        description: Return date, YYYY-MM-DD. Leave it out to use the package length.
+        schema:
+          type: string
+      - name: travelers
+        in: query
+        required: true
+        description: Number of travelers (1-20).
+        schema:
+          type: integer
+      - name: start_date
+        in: query
+        required: true
+        description: Departure date, YYYY-MM-DD.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    title: Ok
+                    description: False when the request could not be fulfilled; see error.
+                  error:
+                    type: object
+                    title: ErrorInfo
+                    properties:
+                      code:
+                        type: string
+                        title: Code
+                        description: Stable error code, e.g. unknown_package, invalid_dates.
+                      message:
+                        type: string
+                        title: Message
+                        description: Short explanation in Spanish, safe to tell the traveler.
+                    required:
+                    - code
+                    - message
+                  nights:
+                    type: integer
+                    title: Nights
+                  package:
+                    type: object
+                    title: PackageInfo
+                    properties:
+                      name:
+                        type: string
+                        title: Name
+                      package_id:
+                        type: string
+                        title: Package Id
+                      destination:
+                        type: string
+                        title: Destination
+                      duration_days:
+                        type: integer
+                        title: Duration Days
+                    required:
+                    - package_id
+                    - destination
+                    - name
+                    - duration_days
+                  available:
+                    type: boolean
+                    title: Available
+                    default: false
+                  rate_per_person:
+                    type: object
+                    title: Money
+                    properties:
+                      amount:
+                        type: integer
+                        title: Amount
+                        description: Integer amount in the currency's units (COP has no cents).
+                      currency:
+                        type: string
+                        title: Currency
+                    required:
+                    - amount
+                    - currency
+      security:
+      - scheme0: []
+      x-ibm-orchestrate-app-id: andes_tools_api
+components:
+  securitySchemes:
+    scheme0:
+      type: apiKey
+      in: header
+      name: X-API-Key

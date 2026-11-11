@@ -1,0 +1,56 @@
+{
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo. Tu correo es test+golden-04@andes.test. Viajas en pareja, les gusta la playa y descansar, presupuesto medio. Cuando te pregunten si pueden guardar tus preferencias, dices que sí. Luego pides que te recomienden un destino. Solo quieres ideas: no das fechas ni pides cotización, y si te las preguntan respondes que por ahora solo quieres ideas.",
+  "starting_sentence": "Hola, quiero ideas para un viaje en pareja: nos gusta la playa y descansar",
+  "goals": {
+    "contexto": [
+      "perfil"
+    ],
+    "perfil": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-04@andes.test"
+      }
+    },
+    {
+      "name": "perfil",
+      "type": "tool_call",
+      "tool_name": "guardar_perfil_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-04@andes.test",
+        "consent_personalization": true,
+        "attributes": {},
+        "persona_prompt": "x"
+      },
+      "arg_matching": {
+        "attributes": "ignore",
+        "persona_prompt": "ignore"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Recomienda paquetes de playa del catálogo, como San Andrés.",
+      "keywords": []
+    }
+  ],
+  "x_db": {
+    "quotes": [],
+    "reservations": 0,
+    "profile": {
+      "consent": true,
+      "persona_spanish": true
+    }
+  },
+  "x_text_anywhere": [
+    "San Andrés"
+  ]
+}

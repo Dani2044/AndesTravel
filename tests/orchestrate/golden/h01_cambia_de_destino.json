@@ -1,0 +1,64 @@
+{
+  "x_holdout": true,
+  "agent": "Untitled_Agent_1_5717pu",
+  "story": "Eres un viajero nuevo. Tu correo es test+golden-09@andes.test. Empiezas preguntando por Cartagena, pero cuando te pidan datos cambias de idea: prefieres San Andrés del {d+30} al {d+34}, 2 personas en total contándote. No quieres guardar preferencias. Solo quieres la cotización, no reservas.",
+  "starting_sentence": "Hola, ¿qué tal Cartagena para un viaje?",
+  "goals": {
+    "contexto": [
+      "cotizar"
+    ],
+    "cotizar": [
+      "summarize"
+    ],
+    "summarize": []
+  },
+  "goal_details": [
+    {
+      "name": "contexto",
+      "type": "tool_call",
+      "tool_name": "contexto_del_viajero",
+      "args": {
+        "path_traveler_id": "test+golden-09@andes.test"
+      }
+    },
+    {
+      "name": "cotizar",
+      "type": "tool_call",
+      "tool_name": "cotizar_paquete",
+      "args": {
+        "traveler_id": "test+golden-09@andes.test",
+        "package": "x",
+        "start_date": "{d+30}",
+        "end_date": "{d+34}",
+        "travelers": 2,
+        "include_insurance": false
+      },
+      "arg_matching": {
+        "package": "ignore",
+        "include_insurance": "ignore",
+        "end_date": "optional"
+      }
+    },
+    {
+      "name": "summarize",
+      "type": "text",
+      "response": "Cotización del paquete de San Andrés para 2 personas, válida por 60 minutos.",
+      "keywords": [
+        "San Andrés"
+      ]
+    }
+  ],
+  "x_db": {
+    "quotes": [
+      {
+        "start_date": "{d+30}",
+        "end_date": "{d+34}",
+        "travelers": 2,
+        "total": 13000000,
+        "destination": "San Andrés"
+      }
+    ],
+    "reservations": 0,
+    "profile": null
+  }
+}

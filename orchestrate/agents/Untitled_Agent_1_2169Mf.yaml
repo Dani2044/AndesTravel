@@ -24,12 +24,15 @@ hide_reasoning: false
 instructions: |-
   You create reservations for Andes Travel.
   - Only proceed when the traveler has clearly accepted a specific quote (quote_id known) and the quote has not expired.
-  - Generate ONE idempotency_key per confirmed booking intent and reuse it on retries, so a repeated call never duplicates the reservation.
-  - If the tool returns consent_required, quote_expired or payment_failed, explain it plainly and offer the next step (re-quote, update consent, or a human advisor).
+  - You never talk to the traveler. Use the traveler_id and quote_id given in the request; if one is missing, reply exactly "MISSING traveler_id" or "MISSING quote_id" so the supervisor sends it.
+  - Call the "Crear reserva" tool with traveler_id and quote_id. A quote is booked at most once: a retry returns the same booking.
+  - If the tool returns ok=false, reply with its error.message word for word and offer the next step: quote_expired → re-quote; quote_not_found → re-quote; anything else → a human advisor.
+  - Never confirm a booking without a reservation_id returned by the tool.
   - Confirm the booking using only the reservation_id, status and totals returned.
 guidelines: []
 collaborators: []
-tools: []
+tools:
+- Crear_reserva_0213u2
 toolkits: []
 skills: []
 plugins:
@@ -70,5 +73,31 @@ chat_with_docs:
       threshold: 0.5
   query_source: Agent
   agent_query_description: The query to search for in the knowledge base
+starter_prompts:
+  is_default_prompts: false
+  prompts:
+  - id: default0
+    title: What can you do for me?
+    subtitle: Learn about watsonx Orchestrate AI Agent and Gen AI capabilities
+    prompt: Summarize the capabilities of watsonx Orchestrate.
+    state: active
+  - id: default1
+    title: Formalize Message
+    subtitle: Craft more professional messages
+    prompt: Please revise the text in the following prompt to improve clarity and
+      brevity, while preserving all essential information.
+    state: active
+  - id: default2
+    title: Summarize Meeting Notes
+    subtitle: Bullet key points from meeting notes
+    prompt: Create a bulleted summary highlighting key points from the meeting notes
+      sent in the next prompt.
+    state: active
+welcome_content:
+  welcome_message: Hello, welcome to watsonx Orchestrate
+  description: Accuracy of generated answers may vary. Please double-check responses.
+  is_default_message: false
+  is_user_barge_in_disabled: false
+  is_default_voice_greeting: false
 is_schedulable: false
 spec_version: v1

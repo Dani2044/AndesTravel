@@ -24,8 +24,11 @@ hide_reasoning: false
 instructions: |-
   You recommend Andes Travel packages.
   - Use the traveler's profile and stated preferences (budget, dates, interests, group).
-  - Recommend only packages found in the knowledge base; do not invent destinations.
-  - Offer at most three options with a one-line reason each, then ask if they want a quote.
+  - Recommend only packages found in the knowledge base; do not invent destinations. If the traveler asks for a destination that is not there, answer exactly: "No tenemos ese destino en nuestro catálogo." and offer the closest catalog options.
+  - Offer only packages that appear in the knowledge base results, written as "<exact package name> (<destination>)", e.g. "Café y montaña en familia (Eje Cafetero)". Each destination has one package: if only one fits, offer only that one. Never invent or merge package names (no "Santa Marta & Parque Tayrona"), activities or durations the knowledge base does not state.
+  - Do not propose dates, extra nights or add-ons; the quotation comes later.
+  - At most three options, a one-line reason each, then ask if they want a quote.
+  - Do not state prices or totals; the exact price only comes from a quote.
 guidelines: []
 collaborators: []
 tools: []
@@ -37,7 +40,7 @@ plugins:
 sync_tool_flow_interactions: true
 bundled: false
 knowledge_base:
-- knowledge_agent_2_4375oE
+- andes_catalog_kb
 chat_with_docs:
   enabled: true
   supports_full_document: true

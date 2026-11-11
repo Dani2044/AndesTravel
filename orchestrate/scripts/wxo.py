@@ -117,6 +117,74 @@ def safe_name(name: str) -> str:
     return name.replace("/", "_").replace(":", "_")
 
 
+# --------------------------------------------------------------------------- knowledge bases
+
+# Source documents live next to the KB YAMLs (knowledge_bases/docs/...). The export never
+# returns them (`documents: []`), so pull keeps the local list, and push uploads copies:
+# Markdown is not an accepted upload type, so .md files go up as .txt (same text).
+KB_RENAME_SUFFIXES = {".md": ".txt", ".markdown": ".txt"}
+
+
+def _doc_path(entry) -> str:
+    """A `documents:` entry is either a path or {path, url}."""
+    return entry["path"] if isinstance(entry, dict) else entry
+
+
+def merge_kb_documents(exported: dict, local_documents: list | None) -> dict:
+    """Return the exported KB spec with the local `documents:` list put back.
+
+    The CLI export always says `documents: []`; the local list (paths relative to the
+    YAML) is the only record of which files feed the KB, so it wins when it is non-empty.
+    """
+    if not local_documents:
+        return exported
+    merged = dict(exported)
+    merged["documents"] = list(local_documents)
+    return merged
+
+
+def local_kb_documents(root: Path) -> dict[str, list]:
+    """KB name -> non-empty `documents:` list, from the KB YAMLs under root."""
+    found: dict[str, list] = {}
+    for f in sorted((root / "knowledge_bases").glob("*.yaml")):
+        data = read_yaml(f) or {}
+        if data.get("documents"):
+            found[data.get("name") or f.stem] = data["documents"]
+    return found
+
+
+def stage_knowledge_base(path: Path, staging: Path) -> Path:
+    """Copy a KB YAML and its documents into staging, ready for `knowledge-bases import`.
+
+    The ADK resolves relative document paths against the YAML's folder; the staged YAML
+    points at absolute paths of the copies, so it works from any cwd. Markdown documents
+    are renamed to .txt. Raises if a document is missing or two uploads share a name.
+    Returns path unchanged when the KB has no documents.
+    """
+    path = path.resolve()
+    data = read_yaml(path) or {}
+    documents = data.get("documents") or []
+    if not documents:
+        return path
+    docs_dir = staging / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    staged_docs = []
+    for entry in documents:
+        rel = _doc_path(entry)
+        src = Path(rel) if Path(rel).is_absolute() else path.parent / rel
+        if not src.is_file():
+            raise RuntimeError(f"{path.name}: document {rel} not found at {src}")
+        target = docs_dir / (src.stem + KB_RENAME_SUFFIXES.get(src.suffix.lower(), src.suffix))
+        if target.exists():
+            raise RuntimeError(f"{path.name}: two documents upload as {target.name}")
+        shutil.copyfile(src, target)
+        staged = str(target)
+        staged_docs.append({**entry, "path": staged} if isinstance(entry, dict) else staged)
+    out = staging / path.name
+    write_yaml(out, {**data, "documents": staged_docs})
+    return out
+
+
 # --------------------------------------------------------------------------- environment
 
 
@@ -180,7 +248,15 @@ def pull(dest: Path) -> dict:
     snap = snapshot()
     by_name = {t["name"]: t for t in snap.tools.values()}
     agents_by_name = {a["name"]: a for a in snap.agents}
+    # Read from the repo (not dest) so a pull into a staging folder for `plan` carries the
+    # same document lists and the comparison only sees configuration changes.
+    kb_documents = local_kb_documents(ROOT)
     for kind in KINDS:
+        if kind == "knowledge_bases":
+            # Keep the KB source documents (knowledge_bases/docs/); only the YAMLs are pulled.
+            for f in (dest / kind).glob("*.yaml"):
+                f.unlink()
+            continue
         shutil.rmtree(dest / kind, ignore_errors=True)
     summary: dict[str, list[str]] = {k: [] for k in KINDS}
     warnings: list[str] = []
@@ -296,7 +372,8 @@ def pull(dest: Path) -> dict:
         write_yaml(dest / "toolkits" / f"{safe_name(tk['name'])}.yaml", data)
         summary["toolkits"].append(tk["name"])
 
-    # Knowledge bases (configuration only; documents are not exportable).
+    # Knowledge bases (configuration only; documents are not exportable, so the local
+    # `documents:` list is kept).
     known_kbs = {k["name"] for k in snap.knowledge_bases.values()}
     for name in sorted(kb_names):
         if name not in known_kbs:
@@ -305,6 +382,8 @@ def pull(dest: Path) -> dict:
         out = dest / "knowledge_bases" / f"{safe_name(name)}.yaml"
         out.parent.mkdir(parents=True, exist_ok=True)
         orch("knowledge-bases", "export", "-n", name, "-o", str(out))
+        if name in kb_documents:
+            write_yaml(out, merge_kb_documents(read_yaml(out), kb_documents[name]))
         summary["knowledge_bases"].append(name)
 
     # Voice configurations referenced by agents (API keys are stripped by the CLI).
@@ -427,6 +506,13 @@ def push_openapi_tool(path: Path) -> None:
     ToolsController(tool_kind=ToolKind.openapi, file=str(path)).publish_or_update_tools([tool])
 
 
+def push_knowledge_base(path: Path) -> None:
+    """Import a KB with its documents staged (see stage_knowledge_base)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        staged = stage_knowledge_base(path, Path(tmp))
+        orch("knowledge-bases", "import", "-f", str(staged))
+
+
 def push_commands(item: Item) -> list[list[str]]:
     """CLI invocations for one resource (OpenAPI tools are pushed through the ADK library)."""
     p = str(item.path)
@@ -494,8 +580,17 @@ def push(apply: bool, only: list[str], update_safe: bool) -> int:
     for item, action in ordered:
         log(f"  {action:<6} {describe(item)}")
         if not apply:
+            if item.kind == "knowledge_bases":
+                try:  # check the documents are there before anyone runs --apply
+                    with tempfile.TemporaryDirectory() as tmp:
+                        stage_knowledge_base(item.path, Path(tmp))
+                except Exception as exc:
+                    log(f"         would FAIL: {exc}")
             continue
         try:
+            if item.kind == "knowledge_bases":
+                push_knowledge_base(item.path)
+                continue
             cmds = push_commands(item)
             if item.kind == "tools" and not cmds:
                 push_openapi_tool(item.path)

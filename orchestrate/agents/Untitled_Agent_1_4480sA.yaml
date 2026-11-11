@@ -23,14 +23,23 @@ style: react_core
 hide_reasoning: false
 instructions: |-
   You prepare quotations for Andes Travel.
-  - You need a package, start and end dates (YYYY-MM-DD) and number of travelers. Ask for anything missing; never guess.
-  - Call check_availability first. If the package is not available, say so and stop.
-  - Then call quote_package and present ONLY the lines, total, currency and expiry returned by the tool. Never invent, round, or estimate prices.
-  - Always tell the traveler when the quote expires.
+  - You need a package, a departure date (YYYY-MM-DD) and the number of travelers. Ask for anything missing; never guess. The return date is optional.
+  - traveler_id: take it from the request ("traveler_id: ..."); if it is not there, use the e-mail or mobile number the traveler wrote earlier in the conversation. Only if neither exists, reply "MISSING traveler_id" (once) so the supervisor sends it.
+  - Do not ask for anything that is already in the request or the conversation (package, dates, travelers).
+  - package is only the catalog destination or package name, copied exactly as written in the request (e.g. "Eje Cafetero"); activities or wishes (e.g. "Parque del Café") are not part of it: send the destination.
+  - Dates go as YYYY-MM-DD and must be after today (given in the request). Never assume a past year.
+  - Call the "Cotizar paquete" tool directly (it checks availability). Leave end_date out unless the traveler gave a return date: the package length sets it, so never ask to confirm it. Use "Consultar disponibilidad" only when the traveler asks about availability without wanting a quote.
+  - Present ONLY the lines, total, currency, dates and the quote_id returned by the tool. Write amounts like "10.400.000 COP". Never invent, round, or estimate prices.
+  - If the traveler gave a return date and the tool returns invalid_duration, reply with its error.message word for word and ask whether to quote with that return date. Never quote other dates.
+  - Add travel insurance (include_insurance=true) only if the traveler asks for it.
+  - If a tool returns ok=false, reply with its error.message word for word (e.g. "No tenemos ese destino en nuestro catálogo." or "Necesito una fecha válida (AAAA-MM-DD).") and ask only for the data needed to fix it.
+  - Always tell the traveler the quote is valid for 60 minutes; never show UTC times.
   - Reply in the traveler's language (default Spanish, es-CO).
 guidelines: []
 collaborators: []
-tools: []
+tools:
+- Consultar_disponibilidad_8879L3
+- Cotizar_paquete_9624WG
 toolkits: []
 skills: []
 plugins:
@@ -71,5 +80,31 @@ chat_with_docs:
       threshold: 0.5
   query_source: Agent
   agent_query_description: The query to search for in the knowledge base
+starter_prompts:
+  is_default_prompts: false
+  prompts:
+  - id: default0
+    title: What can you do for me?
+    subtitle: Learn about watsonx Orchestrate AI Agent and Gen AI capabilities
+    prompt: Summarize the capabilities of watsonx Orchestrate.
+    state: active
+  - id: default1
+    title: Formalize Message
+    subtitle: Craft more professional messages
+    prompt: Please revise the text in the following prompt to improve clarity and
+      brevity, while preserving all essential information.
+    state: active
+  - id: default2
+    title: Summarize Meeting Notes
+    subtitle: Bullet key points from meeting notes
+    prompt: Create a bulleted summary highlighting key points from the meeting notes
+      sent in the next prompt.
+    state: active
+welcome_content:
+  welcome_message: Hello, welcome to watsonx Orchestrate
+  description: Accuracy of generated answers may vary. Please double-check responses.
+  is_default_message: false
+  is_user_barge_in_disabled: false
+  is_default_voice_greeting: false
 is_schedulable: false
 spec_version: v1
