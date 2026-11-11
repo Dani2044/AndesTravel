@@ -82,6 +82,23 @@ typecheck: ## Static type check
 ollama-pull: ## Pull the default local model
 	ollama pull qwen2.5:14b
 
+# --- watsonx Orchestrate environment (see orchestrate/README.md) ---
+WXO_PY ?= $(shell uv tool dir 2>/dev/null)/ibm-watsonx-orchestrate/bin/python
+WXO := $(WXO_PY) orchestrate/scripts/wxo.py
+WXO_PUSH_FLAGS := $(if $(APPLY),--apply) $(if $(ONLY),--only $(ONLY)) $(if $(UPDATE_SAFE),--update-safe)
+
+.PHONY: wxo-pull
+wxo-pull: ## Orchestrate: export the instance into orchestrate/
+	$(WXO) pull
+
+.PHONY: wxo-plan
+wxo-plan: ## Orchestrate: diff orchestrate/ against the instance
+	$(WXO) plan
+
+.PHONY: wxo-push
+wxo-push: ## Orchestrate: push changed files (dry run; APPLY=1 to apply, ONLY=agents/X)
+	$(WXO) push $(WXO_PUSH_FLAGS)
+
 .PHONY: clean
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist
