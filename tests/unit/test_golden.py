@@ -241,3 +241,24 @@ def test_invented_price_is_critical(golden: ModuleType) -> None:
     a = {**_attempt("ok"), "critical": "amount '12.600.000' shown before any quote"}
     rows, ok = golden.gate_rows({"results": {"s": [[a], [_attempt("ok")], [_attempt("ok")]]}}, {})
     assert not rows[0]["passed"] and rows[0]["critical"] and not ok
+
+
+def test_text_anywhere_when_tools_matched(golden: ModuleType) -> None:
+    row = {
+        "is_success": "False",
+        "missed_tool_calls": "0",
+        "correct_tool_calls": "2",
+        "expected_tool_calls": "2",
+    }
+    talk = [
+        _msg(
+            "assistant", "Te recomiendo Paraíso de arrecifes (San Andrés)", "conversational_search"
+        ),
+        _msg("user", "Solo la recomendación"),
+        _msg("assistant", "¡Buen día!"),
+    ]
+    story = {"x_text_anywhere": ["Paraíso de arrecifes"]}
+    assert golden.evaluator_ok(row, story, talk)
+    assert not golden.evaluator_ok(row, {}, talk)  # without the key, the evaluator decides
+    assert not golden.evaluator_ok({**row, "missed_tool_calls": "1"}, story, talk)
+    assert not golden.evaluator_ok(row, {"x_text_anywhere": ["Amazonía"]}, talk)

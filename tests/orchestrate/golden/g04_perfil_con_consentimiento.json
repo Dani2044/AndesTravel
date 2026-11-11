@@ -49,5 +49,8 @@
       "consent": true,
       "persona_spanish": true
     }
-  }
+  },
+  "x_text_anywhere": [
+    "San Andrés"
+  ]
 }

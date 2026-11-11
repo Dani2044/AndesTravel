@@ -7,6 +7,7 @@ own `x_*` keys, which are removed before the evaluator sees them:
     x_db       what must be in Supabase afterwards (deterministic judge)
     x_seed     a stored profile the traveler must already have (returning traveler)
     x_holdout  never shown to the refinement loop; only counts in the gate
+    x_text_anywhere  strings some answer must contain (instead of only the last one)
 
 Dates are written relative to today in Colombia as {d+N}, so stories never go stale.
 
@@ -369,12 +370,38 @@ def _latest(attempt_dir: Path) -> Path | None:
     return found[-1] if found else None
 
 
-def _evaluator_results(attempt_dir: Path) -> tuple[dict[str, bool], Path | None]:
+def _evaluator_results(attempt_dir: Path) -> tuple[dict[str, dict], Path | None]:
     latest = _latest(attempt_dir)
     if not latest:
         return {}, None
     with (latest / "summary_metrics.csv").open(newline="") as f:
-        return {r["dataset_name"]: r["is_success"] == "True" for r in csv.DictReader(f)}, latest
+        return {r["dataset_name"]: r for r in csv.DictReader(f)}, latest
+
+
+def evaluator_ok(row: dict | None, story: dict[str, Any], messages: list[dict]) -> bool:
+    """The evaluator's verdict, except for its text check on the LAST message.
+
+    The simulated user often keeps talking after its goal ("solo la recomendación"), so
+    the last answer is a goodbye. A story with x_text_anywhere passes the text check when
+    every expected tool call happened and some answer shown to the traveler contains all
+    of those strings.
+    """
+    if not row:
+        return False
+    if row.get("is_success") == "True":
+        return True
+    wanted = story.get("x_text_anywhere")
+    if not wanted:
+        return False
+    tools_ok = row.get("missed_tool_calls") in ("0", "0.0") and row.get(
+        "correct_tool_calls"
+    ) == row.get("expected_tool_calls")
+    shown = " ".join(
+        _text(m.get("content"))
+        for m in messages
+        if m.get("role") == "assistant" and (m.get("type") or "text") in VISIBLE
+    ).lower()
+    return tools_ok and all(w.lower() in shown for w in wanted)
 
 
 def _messages(run_dir: Path | None, name: str) -> list[dict[str, Any]]:
@@ -434,8 +461,8 @@ def attempt(orchestrate: str, label: str, stories: dict[str, dict[str, Any]]) ->
     db = judge(stories)
     results = {}
     for name in stories:
-        ok = evaluator.get(name, False)
         messages = _messages(run_dir, name)
+        ok = evaluator_ok(evaluator.get(name), stories[name], messages)
         problem = simulator_problem(messages, ok and not db[name])
         results[name] = {
             "critical": critical_problem(messages),
