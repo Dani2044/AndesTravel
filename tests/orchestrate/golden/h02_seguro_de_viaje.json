@@ -34,7 +34,8 @@
         "include_insurance": true
       },
       "arg_matching": {
-        "package": "ignore"
+        "package": "ignore",
+        "end_date": "optional"
       }
     },
     {

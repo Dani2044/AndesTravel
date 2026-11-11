@@ -262,3 +262,15 @@ def test_text_anywhere_when_tools_matched(golden: ModuleType) -> None:
     assert not golden.evaluator_ok(row, {}, talk)  # without the key, the evaluator decides
     assert not golden.evaluator_ok({**row, "missed_tool_calls": "1"}, story, talk)
     assert not golden.evaluator_ok(row, {"x_text_anywhere": ["Amazonía"]}, talk)
+
+
+def test_left_after_question_without_trailing_mark(golden: ModuleType) -> None:
+    left = [_msg("user", "Hola"), _msg("assistant", "¿Qué fecha de salida? (Formato: AAAA-MM-DD)")]
+    assert "left after" in golden.simulator_problem(left, passed=False)
+
+
+def test_quote_goals_accept_a_missing_end_date(golden: ModuleType) -> None:
+    for name, story in golden.load_stories(TODAY).items():
+        for g in story["goal_details"]:
+            if g.get("tool_name") == "cotizar_paquete":
+                assert g["arg_matching"].get("end_date") == "optional", name

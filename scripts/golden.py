@@ -308,7 +308,7 @@ def simulator_problem(messages: list[dict[str, Any]], passed: bool) -> str | Non
         if (
             last.get("role") == "assistant"
             and (last.get("type") or "text") == "text"
-            and _text(last.get("content")).rstrip().endswith("?")
+            and "?" in _text(last.get("content"))
             and not any(
                 m.get("type") == "tool_call" and "escalar" in _text(m.get("content"))
                 for m in messages
