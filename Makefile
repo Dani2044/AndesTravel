@@ -111,6 +111,10 @@ wxo-push: wxo-login ## Orchestrate: push changed files (dry run; APPLY=1 to appl
 tools-specs: ## Regenerate build/andes_tools_api.openapi.yaml (tools API) to import in the Orchestrate console
 	$(PY) --env-file .env python scripts/gen_tool_specs.py
 
+.PHONY: wxo-plugins
+wxo-plugins: tools-specs wxo-login ## Orchestrate: (re)import the price_guard plug-in (attached to the supervisor's agent_post_invoke)
+	$(dir $(WXO_PY))orchestrate tools import -k openapi -f build/price_guard.openapi.yaml -a andes_tools_api
+
 .PHONY: wxo-connection-creds
 wxo-connection-creds: ## Orchestrate: give the andes_tools_api connection the TOOLS_API_KEY from .env (ENV=draft|live)
 	@set -a; . ./.env; set +a; \

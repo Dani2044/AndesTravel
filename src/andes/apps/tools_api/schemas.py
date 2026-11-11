@@ -182,7 +182,7 @@ class PluginIn(BaseModel):
     """What watsonx Orchestrate sends to an OpenAPI plug-in."""
 
     payload: dict = Field(description="The agent payload for this phase (messages, tool_calls).")
-    context: dict = Field(default_factory=dict, description="System, request and plug-in context.")
+    context: dict = Field(description="System, request and plug-in context.")
 
 
 class PluginOut(BaseModel):
