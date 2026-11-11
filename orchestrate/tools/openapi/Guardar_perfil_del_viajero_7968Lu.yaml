@@ -19,79 +19,76 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              title: ProfileIn
-              description: The HTML request body used to satisfy this user utterance.
               properties:
-                attributes:
-                  type: object
-                  title: TravelerProfileAttributes
-                  properties:
-                    notes:
-                      type: string
-                      title: Notes
-                      description: Other preferences. Never documents, card or health data.
-                    interests:
-                      type: array
-                      title: Interests
-                      description: e.g. playa, montaña, café.
-                      items:
-                        type: string
-                    companions:
-                      type: string
-                      title: Companions
-                      description: e.g. pareja, familia con niños, amigos, solo.
-                    group_size:
-                      type: integer
-                      title: Group Size
-                      description: Usual number of travelers.
-                    travel_style:
-                      type: string
-                      title: Travel Style
-                      description: e.g. aventura, descanso, cultural, gastronómico.
-                    dates_flexibility:
-                      type: string
-                      title: Dates Flexibility
-                      description: e.g. fechas fijas, flexible.
-                    budget_cop_per_person:
-                      type: integer
-                      title: Budget Cop Per Person
-                      description: Budget per person in COP, if the traveler gave one.
-                persona_prompt:
-                  type: string
-                  title: Persona Prompt
-                  description: Up to 600 characters, third person, summarizing what matters to personalize
-                    for this traveler (style, budget, companions, constraints, past trips). Rewrite the
-                    whole summary each time; no sensitive data.
                 consent_personalization:
                   type: boolean
                   title: Consent Personalization
                   description: True only if the traveler explicitly agreed that Andes Travel stores their
                     preferences to personalize future conversations. False revokes consent and erases
                     the stored profile.
+                attributes:
+                  properties:
+                    budget_cop_per_person:
+                      type: integer
+                      title: Budget Cop Per Person
+                      description: Budget per person in COP, if the traveler gave one.
+                    travel_style:
+                      type: string
+                      title: Travel Style
+                      description: e.g. aventura, descanso, cultural, gastronómico.
+                    interests:
+                      items:
+                        type: string
+                      type: array
+                      title: Interests
+                      description: e.g. playa, montaña, café.
+                    group_size:
+                      type: integer
+                      title: Group Size
+                      description: Usual number of travelers.
+                    companions:
+                      type: string
+                      title: Companions
+                      description: e.g. pareja, familia con niños, amigos, solo.
+                    dates_flexibility:
+                      type: string
+                      title: Dates Flexibility
+                      description: e.g. fechas fijas, flexible.
+                    notes:
+                      type: string
+                      title: Notes
+                      description: Other preferences. Never documents, card or health data.
+                  type: object
+                  title: TravelerProfileAttributes
+                persona_prompt:
+                  type: string
+                  title: Persona Prompt
+                  description: Up to 600 characters, third person, summarizing what matters to personalize
+                    for this traveler (style, budget, companions, constraints, past trips). Rewrite the
+                    whole summary each time; no sensitive data.
+              type: object
               required:
               - consent_personalization
+              title: ProfileIn
       parameters:
       - name: traveler_id
         in: path
         required: true
         schema:
           type: string
+          title: Traveler Id
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: object
                 properties:
                   ok:
                     type: boolean
                     title: Ok
                     description: False when the request could not be fulfilled; see error.
                   error:
-                    type: object
-                    title: ErrorInfo
                     properties:
                       code:
                         type: string
@@ -101,17 +98,28 @@ paths:
                         type: string
                         title: Message
                         description: Short explanation in Spanish, safe to tell the traveler.
+                    type: object
                     required:
                     - code
                     - message
+                    title: ErrorInfo
+                  traveler_id:
+                    type: string
+                    title: Traveler Id
                   stored:
                     type: boolean
                     title: Stored
                     description: True when the profile was saved.
                     default: false
-                  traveler_id:
-                    type: string
-                    title: Traveler Id
+                  erased:
+                    type: boolean
+                    title: Erased
+                    description: True when consent was denied and any stored profile is gone.
+                    default: false
+                type: object
+                required:
+                - ok
+                title: ProfileOut
       security:
       - scheme0: []
       x-ibm-orchestrate-app-id: andes_tools_api

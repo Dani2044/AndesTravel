@@ -147,19 +147,18 @@ async def test_handoff_persists(client: httpx.AsyncClient) -> None:
 
 async def test_one_booking_per_quote_even_with_other_keys(client: httpx.AsyncClient) -> None:
     q = await _quote(client, "twice@example.com")
-    first, second = (
-        (
-            await client.post(
-                "/reservations",
-                json={
-                    "traveler_id": "twice@example.com",
-                    "quote_id": q["quote_id"],
-                    "idempotency_key": key,
-                },
-                headers=H,
-            )
-        ).json()
-        for key in ("a", "b")
-    )
+    out = []
+    for key in ("a", "b"):
+        r = await client.post(
+            "/reservations",
+            json={
+                "traveler_id": "twice@example.com",
+                "quote_id": q["quote_id"],
+                "idempotency_key": key,
+            },
+            headers=H,
+        )
+        out.append(r.json())
+    first, second = out
     assert first["ok"] and second["reservation_id"] == first["reservation_id"]
     assert second["deduplicated"] is True
