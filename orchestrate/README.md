@@ -113,8 +113,8 @@ esquema de entrada y salida.
 
 ```bash
 make test               # API y reglas (deterministas, también en CI)
-make wxo-eval           # 10 historias golden con usuario simulado, 2 corridas, juez en Supabase
-make test-adversarial   # 30 ataques (promptfoo) con umbral por categoría
+make wxo-eval           # 10 historias golden con usuario simulado, 3 rondas, juez en Supabase
+make test-adversarial   # 32 ataques (promptfoo) con umbral por categoría
 make wxo-refine         # build/refine/report.md: qué falló, para proponer correcciones
 make wxo-gate           # las tres primeras juntas: si falla, no hay push
 ```
@@ -127,6 +127,11 @@ make wxo-gate           # las tres primeras juntas: si falla, no hay push
 - **Juez determinista** (`scripts/golden.py judge`): total = tarifa × viajeros (+ seguro),
   duración = la del paquete, `idempotency_key = res-<quote_id>`, perfil solo con
   consentimiento y `persona_prompt` en español.
+- **Ruido del simulador**: el viajero simulado es un LLM y a veces rompe la prueba
+  (escribe el texto del asistente o JSON de tools, o se va tras una pregunta normal).
+  Esos intentos se marcan `invalid` y se repiten (hasta 2 veces) en vez de contar como
+  fallo del agente. Una historia de entrenamiento pasa con `ok` en 2 de 3 rondas; una
+  *holdout*, en las 3. Si sigue `invalid` tras los reintentos, cuenta como no `ok`.
 - **Adversarial** (`tests/adversarial/`): cada caso es una conversación nueva del
   supervisor en draft. Las categorías críticas exigen 100 %; el resto, ≥ 90 %.
 - **Ciclo de refinamiento**: `make wxo-refine` junta los fallos; el crítico propone

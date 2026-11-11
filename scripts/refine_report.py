@@ -36,12 +36,12 @@ def _short(text: Any) -> str:
     return text if len(text) <= MAX_TURN_CHARS else text[:MAX_TURN_CHARS] + " …"
 
 
-def transcript(run: str, story: str) -> list[str]:
-    files = sorted((EVAL / run).glob(f"*/messages/{story}.messages.json"))
-    if not files:
+def transcript(run: str | None, story: str) -> list[str]:
+    path = EVAL / run / "messages" / f"{story}.messages.json" if run else None
+    if not path or not path.exists():
         return ["(no transcript)"]
     lines = []
-    for m in json.loads(files[-1].read_text(encoding="utf-8")):
+    for m in json.loads(path.read_text(encoding="utf-8")):
         kind = m.get("type") or "text"
         lines.append(f"- **{m.get('role')}/{kind}**: {_short(m.get('content'))}")
     return lines
@@ -53,13 +53,23 @@ def golden_section() -> list[str]:
         return ["_No golden run yet (make wxo-eval)._"]
     out = []
     for row in json.loads(gate.read_text(encoding="utf-8")):
-        fails = [r for r in row["runs"] if not (r["evaluator"] and not r["db"])]
-        status = "PASS" if not fails else f"FAIL in {len(fails)}/{len(row['runs'])} runs"
-        out.append(f"### {row['story']}{' (holdout)' if row['holdout'] else ''}: {status}")
-        if not fails or row["holdout"]:
+        verdict = "PASS" if row["passed"] else "FAIL"
+        rounds = " ".join(row["statuses"])
+        noise = f", {row['invalid_attempts']} invalid attempts" if row["invalid_attempts"] else ""
+        out.append(
+            f"### {row['story']}{' (holdout)' if row['holdout'] else ''}: {verdict} "
+            f"({rounds}; needs {row['need']} ok{noise})"
+        )
+        if row["holdout"]:
             continue
-        for r in fails:
-            out.append(f"**{r['run']}**: evaluator {'ok' if r['evaluator'] else 'FAIL'}")
+        # agent failures first; invalid attempts only say why the simulator was blamed
+        for r in row["runs"]:
+            if r["status"] == "invalid":
+                out.append(f"- {r['attempt']}: invalid ({r['problem']})")
+        for r in row["runs"]:
+            if r["status"] != "fail":
+                continue
+            out.append(f"**{r['attempt']}**: evaluator {'ok' if r['evaluator'] else 'FAIL'}")
             out += [f"- db: {e}" for e in r["db"]]
             out.append("")
             out += transcript(r["run"], row["story"])

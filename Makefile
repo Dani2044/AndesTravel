@@ -119,24 +119,16 @@ wxo-connection-creds: ## Orchestrate: give the andes_tools_api connection the TO
 
 # --- Agent quality: golden stories, adversarial suite, refinement loop (Day 4) ---
 # All of them talk to the draft agents and write test+ travelers to Supabase.
-# Each evaluator run writes a new timestamped folder; the gate reads the latest one.
+# Each evaluator attempt writes build/eval/r<round>a<attempt>/<timestamp>/.
 ORCH := $(dir $(WXO_PY))orchestrate
 GOLDEN := $(PY) --env-file .env python scripts/golden.py
-EVAL_RUNS ?= 1 2
+EVAL_ROUNDS ?= 3
 PROMPTFOO := PROMPTFOO_DISABLE_TELEMETRY=1 PROMPTFOO_DISABLE_UPDATE=1 \
 	PROMPTFOO_PYTHON=$(CURDIR)/.venv/bin/python npx --yes promptfoo@0.125.1
 
 .PHONY: wxo-eval
-wxo-eval: wxo-login api-warm ## Golden stories: simulated users vs draft, judged by the evaluator and Supabase (2 runs)
-	@for run in $(EVAL_RUNS); do \
-		echo "== run $$run"; \
-		$(GOLDEN) reset && $(GOLDEN) render --run $$run || exit 1; \
-		$(ORCH) evaluations evaluate -c build/golden/run$$run/config.yaml \
-			> build/golden/run$$run/evaluate.log 2>&1 \
-			|| { tail -20 build/golden/run$$run/evaluate.log; exit 1; }; \
-		$(GOLDEN) judge --run $$run; \
-	done
-	$(GOLDEN) gate
+wxo-eval: wxo-login api-warm ## Golden stories: 3 rounds vs draft; runs the simulated user broke are retried (pass 2/3, holdout 3/3)
+	$(GOLDEN) run --orchestrate $(ORCH) --rounds $(EVAL_ROUNDS)
 
 .PHONY: test-adversarial
 test-adversarial: api-warm ## Adversarial suite (promptfoo) vs the draft supervisor, with category thresholds
@@ -148,7 +140,7 @@ test-adversarial: api-warm ## Adversarial suite (promptfoo) vs the draft supervi
 
 .PHONY: wxo-refine
 wxo-refine: ## Refinement report from the last eval + adversarial runs (build/refine/report.md)
-	@last=$$(ls -d build/eval/run1/*/ 2>/dev/null | tail -1); \
+	@last=$$(ls -d build/eval/r1a1/*/ 2>/dev/null | tail -1); \
 	if [ -n "$$last" ]; then \
 		$(ORCH) evaluations analyze -d "$$last" -t orchestrate/tools/openapi \
 			> build/eval/analyze.txt 2>&1 || true; \

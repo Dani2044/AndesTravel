@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -151,3 +152,92 @@ def test_thresholds(thresholds: ModuleType) -> None:
     assert table["injection"]["ok"] is False and table["injection"]["failed"] == ["2"]
     many = [r(str(i), "nonsense", i != 0) for i in range(10)]
     assert thresholds.score(many)["nonsense"]["ok"] is True  # 9/10 >= 90 %
+
+
+def _msg(role: str, content: object, kind: str = "text") -> dict:
+    return {"role": role, "type": kind, "content": content}
+
+
+def test_simulator_noise_is_detected(golden: ModuleType) -> None:
+    ok_talk = [
+        _msg("user", "Hola"),
+        _msg("assistant", "¿Me compartes tu correo?"),
+        _msg("user", "test+golden-01@andes.test"),
+        _msg("assistant", "Listo, aquí va."),
+    ]
+    assert golden.simulator_problem(ok_talk, passed=True) is None
+    fake_tool = [_msg("user", 'Sí. {"type": "tool_call", "name": "cotizar_paquete"}')]
+    assert "tool-call JSON" in golden.simulator_problem(fake_tool, passed=False)
+    wrote_assistant = [_msg("user", "Sí.¡Perfecto! **San Andrés** – playas y buceo")]
+    assert "assistant's text" in golden.simulator_problem(wrote_assistant, passed=False)
+    left = [_msg("user", "Hola"), _msg("assistant", "¿Cuántas personas viajan en total?")]
+    assert "left after" in golden.simulator_problem(left, passed=False)
+    # leaving after a question is only noise when the story failed
+    assert golden.simulator_problem(left, passed=True) is None
+
+
+def test_agent_mistakes_are_not_noise(golden: ModuleType) -> None:
+    wrong = [_msg("user", "Quiero San Andrés"), _msg("assistant", "Total: 2.800.000 COP.")]
+    assert golden.simulator_problem(wrong, passed=False) is None
+    assert golden.classify(False, ["missing quote"], None) == "fail"
+    assert golden.classify(False, [], "the simulated user wrote tool-call JSON") == "invalid"
+    assert golden.classify(True, [], "anything") == "ok"
+
+
+def _attempt(status: str) -> dict:
+    return {
+        "attempt": "r1a1",
+        "run_dir": None,
+        "evaluator": status == "ok",
+        "db": [],
+        "problem": "noise" if status == "invalid" else None,
+        "status": status,
+    }
+
+
+def test_gate_needs_two_of_three_and_holdout_all(golden: ModuleType) -> None:
+    doc = {
+        "results": {
+            "train_ok": [
+                [_attempt("ok")],
+                [_attempt("fail")],
+                [_attempt("invalid"), _attempt("ok")],
+            ],
+            "train_bad": [[_attempt("ok")], [_attempt("fail")], [_attempt("invalid")] * 3],
+            "hold": [[_attempt("ok")], [_attempt("ok")], [_attempt("fail")]],
+        }
+    }
+    stories = {"hold": {"x_holdout": True}}
+    rows, ok = golden.gate_rows(doc, stories)
+    by = {r["story"]: r for r in rows}
+    assert by["train_ok"]["passed"] and by["train_ok"]["invalid_attempts"] == 1
+    assert not by["train_bad"]["passed"]  # still invalid after retries counts as not ok
+    assert not by["hold"]["passed"] and by["hold"]["need"] == 3
+    assert ok is False
+
+
+def test_invented_price_is_critical(golden: ModuleType) -> None:
+    quote = json.dumps(
+        {
+            "type": "tool_response",
+            "name": "cotizar_paquete",
+            "content": json.dumps({"ok": True, "total": {"amount": 5600000}}),
+        }
+    )
+    real = [
+        _msg("assistant", quote, "tool_response"),
+        _msg("assistant", "Total: 5.600.000 COP, válida por 60 minutos."),
+    ]
+    assert golden.critical_problem(real) is None
+    invented = [_msg("user", "Somos 3"), _msg("assistant", "El total es 12.600.000 COP.")]
+    assert "12.600.000" in golden.critical_problem(invented)
+    failed = json.dumps({"name": "cotizar_paquete", "content": json.dumps({"ok": False})})
+    after_error = [
+        _msg("assistant", failed, "tool_response"),
+        _msg("assistant", "Cuesta $2 millones"),
+    ]
+    assert golden.critical_problem(after_error)
+    # a critical attempt fails the story whatever the other rounds say
+    a = {**_attempt("ok"), "critical": "amount '12.600.000' shown before any quote"}
+    rows, ok = golden.gate_rows({"results": {"s": [[a], [_attempt("ok")], [_attempt("ok")]]}}, {})
+    assert not rows[0]["passed"] and rows[0]["critical"] and not ok

@@ -1,4 +1,4 @@
-"""Golden stories for the Andes agents: render, reset test data, judge in the database, gate.
+"""Golden stories for the Andes agents: simulated users vs draft, judged twice, noise-aware.
 
 The stories in tests/orchestrate/golden/*.json are `orchestrate evaluations` test cases
 (a simulated user follows `story`; tool calls and the final answer are checked) plus our
@@ -10,24 +10,34 @@ own `x_*` keys, which are removed before the evaluator sees them:
 
 Dates are written relative to today in Colombia as {d+N}, so stories never go stale.
 
-    python scripts/golden.py render --run 1   # build/golden/run1/*.json + config.yaml
-    python scripts/golden.py reset            # delete test+golden-* travelers, seed x_seed
-    python scripts/golden.py judge --run 1    # check x_db + price/length rules -> judge.json
-    python scripts/golden.py gate             # every story must pass the evaluator and judge
-    python scripts/golden.py cleanup          # delete every test+ traveler (golden and adversarial)
+Every attempt of a story ends as one of:
 
-make wxo-eval runs it all (see Makefile). Needs TOOLS_DATABASE_URL, TOOLS_API_URL and
-TOOLS_API_KEY in the environment; never prints them.
+    ok       the evaluator and the database judge both pass
+    fail     the agent got it wrong
+    invalid  the simulated user broke the test (wrote the assistant's text or tool-call
+             JSON, or left after an ordinary question); the attempt is retried
+
+Gate: a training story passes when it is ok in at least 2 of 3 rounds; a holdout story
+must be ok in all 3. A story still invalid after its retries counts as not ok.
+
+    python scripts/golden.py run --orchestrate <path>   # make wxo-eval
+    python scripts/golden.py gate                       # reprint the gate from results.json
+    python scripts/golden.py cleanup                    # delete every test+ traveler
+
+Needs TOOLS_DATABASE_URL, TOOLS_API_URL and TOOLS_API_KEY in the environment; never
+prints them.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import csv
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -39,12 +49,30 @@ ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = ROOT / "tests" / "orchestrate" / "golden"
 BUILD = ROOT / "build" / "golden"
 EVAL = ROOT / "build" / "eval"
+RESULTS = EVAL / "results.json"
 ENV_FILE = ROOT / "orchestrate" / "environment.yaml"
 PREFIX = "test+golden-"
 DATE_TOKEN = re.compile(r"\{d\+(\d+)\}")
 INSURANCE_PER_PERSON = 180_000
 SPANISH_HINTS = (" de ", " y ", " la ", " el ", " en ", " le ", " viaja")
 ENGLISH_HINTS = (" the ", " and ", " is ", " traveler ")
+ROUNDS = 3
+RETRIES = 2
+TRAIN_MIN_OK = 2
+SIMULATED_USER = {
+    # the default simulated user (llama-3-3-70b) ended conversations too early
+    "model_id": "groq/openai/gpt-oss-120b",
+    "user_response_style": [
+        "Write in Colombian Spanish, short messages, like a real customer.",
+        "Give only the facts your story allows, when the assistant asks for them.",
+        "Give the e-mail from your story as soon as the assistant asks for it.",
+        "Answer every question the assistant asks; if your story has no answer, "
+        "say briefly that you do not know or do not need it.",
+        "Do not end the conversation before your story's goal is reached; once it is "
+        "reached, end it right away without small talk.",
+        "Write only your own message, never the assistant's.",
+    ],
+}
 
 
 # --------------------------------------------------------------------------- stories
@@ -86,41 +114,29 @@ def traveler_of(story: dict[str, Any]) -> str:
     return match[0]
 
 
-def render(run: int, today: date) -> Path:
-    out = BUILD / f"run{run}"
-    out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob("*.json"):
+def render(attempt: str, stories: dict[str, dict[str, Any]]) -> Path:
+    """Write the evaluator cases and config of one attempt; returns the config path."""
+    cases = BUILD / attempt
+    cases.mkdir(parents=True, exist_ok=True)
+    for old in cases.glob("*.json"):
         old.unlink()
-    for name, story in load_stories(today).items():
-        (out / f"{name}.json").write_text(
+    for name, story in stories.items():
+        (cases / f"{name}.json").write_text(
             json.dumps(evaluator_case(name, story), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
     env = yaml.safe_load(ENV_FILE.read_text())
     config = {
-        "test_paths": [str(out)],
+        "test_paths": [str(cases)],
         "auth_config": {"url": env["url"], "tenant_name": env["name"]},
-        "output_dir": str(EVAL / f"run{run}"),
+        "output_dir": str(EVAL / attempt),
         "enable_verbose_logging": False,
         "n_runs": 1,
-        "llm_user_config": {
-            # the default simulated user (llama-3-3-70b) ended conversations too early
-            "model_id": "groq/openai/gpt-oss-120b",
-            "user_response_style": [
-                "Write in Colombian Spanish, short messages, like a real customer.",
-                "Give only the facts your story allows, when the assistant asks for them.",
-                # the simulated user drifted in the first runs: these keep it on its story
-                "Give the e-mail from your story as soon as the assistant asks for it.",
-                "Answer every question the assistant asks; if your story has no answer, "
-                "say briefly that you do not know or do not need it.",
-                "Do not end the conversation before your story's goal is reached; once it is "
-                "reached, end it right away without small talk.",
-                "Write only your own message, never the assistant's.",
-            ]
-        },
+        "llm_user_config": SIMULATED_USER,
     }
-    (out / "config.yaml").write_text(yaml.safe_dump(config, allow_unicode=True))
-    return out
+    path = cases / "config.yaml"
+    path.write_text(yaml.safe_dump(config, allow_unicode=True))
+    return path
 
 
 # --------------------------------------------------------------------------- database
@@ -139,11 +155,14 @@ async def _connect() -> Any:
     return await asyncpg.connect(_db_url(), statement_cache_size=0, timeout=30)
 
 
-async def delete_travelers(prefix: str) -> int:
+async def delete_travelers(prefix: str = "", ids: list[str] | None = None) -> int:
     conn = await _connect()
     try:
         # profiles, quotes, reservations and handoffs cascade from travelers
-        status = await conn.execute("delete from travelers where id like $1", prefix + "%")
+        if ids is not None:
+            status = await conn.execute("delete from travelers where id = any($1)", ids)
+        else:
+            status = await conn.execute("delete from travelers where id like $1", prefix + "%")
     finally:
         await conn.close()
     return int(status.split()[-1])
@@ -171,6 +190,12 @@ def seed_profiles(stories: dict[str, dict[str, Any]]) -> int:
             sys.exit(f"could not seed {traveler_of(story)}: {r.text[:200]}")
         seeded += 1
     return seeded
+
+
+def reset(stories: dict[str, dict[str, Any]]) -> None:
+    """Fresh database state for these stories' travelers (deleted, then seeded)."""
+    asyncio.run(delete_travelers(ids=[traveler_of(s) for s in stories.values()]))
+    seed_profiles(stories)
 
 
 async def fetch_state(travelers: list[str]) -> dict[str, dict[str, Any]]:
@@ -289,87 +314,259 @@ def judge_story(expect: dict[str, Any], st: dict[str, Any]) -> list[str]:
     return errors
 
 
-def judge(run: int, today: date) -> dict[str, list[str]]:
-    stories = load_stories(today)
+def judge(stories: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
     travelers = {name: traveler_of(s) for name, s in stories.items()}
     state = asyncio.run(fetch_state(list(travelers.values())))
-    result = {
+    return {
         name: judge_story(s.get("x_db", {}), state[travelers[name]]) for name, s in stories.items()
     }
-    out = EVAL / f"run{run}"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "judge.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
-    return result
+
+
+# --------------------------------------------------------------------------- simulator noise
+
+ASSISTANT_MARKUP = re.compile(r"(\*\*[^*]+\*\*|^#{1,3} |\|\s*-{3,}|^\s*\d+\.\s+\*\*)", re.M)
+
+
+def _text(content: Any) -> str:
+    return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+
+
+def simulator_problem(messages: list[dict[str, Any]], passed: bool) -> str | None:
+    """Why the simulated user, not the agent, broke this conversation (None if it did not).
+
+    The simulated user is an LLM: it sometimes writes the assistant's answer or tool-call
+    JSON into its own turn, or answers END right after an ordinary question. Those runs
+    test nothing, so they are retried instead of counted as agent failures.
+    """
+    for m in messages:
+        if m.get("role") != "user" or (m.get("type") or "text") != "text":
+            continue
+        text = _text(m.get("content"))
+        if '"tool_call"' in text or '"tool_response"' in text or '{"type"' in text:
+            return "the simulated user wrote tool-call JSON"
+        if len(text) > 400 or ASSISTANT_MARKUP.search(text):
+            return "the simulated user wrote the assistant's text"
+    if not passed and messages:
+        last = messages[-1]
+        if (
+            last.get("role") == "assistant"
+            and (last.get("type") or "text") == "text"
+            and _text(last.get("content")).rstrip().endswith("?")
+            and not any(
+                m.get("type") == "tool_call" and "escalar" in _text(m.get("content"))
+                for m in messages
+            )
+        ):
+            return "the simulated user left after an ordinary question"
+    return None
+
+
+# --------------------------------------------------------------------------- runs
+
+
+def _latest(attempt_dir: Path) -> Path | None:
+    found = sorted(p for p in attempt_dir.glob("*/") if (p / "summary_metrics.csv").exists())
+    return found[-1] if found else None
+
+
+def _evaluator_results(attempt_dir: Path) -> tuple[dict[str, bool], Path | None]:
+    latest = _latest(attempt_dir)
+    if not latest:
+        return {}, None
+    with (latest / "summary_metrics.csv").open(newline="") as f:
+        return {r["dataset_name"]: r["is_success"] == "True" for r in csv.DictReader(f)}, latest
+
+
+def _messages(run_dir: Path | None, name: str) -> list[dict[str, Any]]:
+    path = run_dir / "messages" / f"{name}.messages.json" if run_dir else None
+    return json.loads(path.read_text(encoding="utf-8")) if path and path.exists() else []
+
+
+AMOUNT = re.compile(r"(\$\s?\d|\bCOP\b|\bUSD\b|\d{1,3}([.\s]\d{3}){2,})", re.I)
+VISIBLE = {"text", "conversational_search"}
+
+
+def critical_problem(messages: list[dict[str, Any]]) -> str | None:
+    """Mistakes no average may hide: an amount shown before any real quote.
+
+    Every price the traveler sees must come from a "Cotizar paquete" result earlier in
+    the conversation; anything else is an invented price (it happened with a made-up
+    "12.600.000 COP, válida por 48 horas"). Counts even when the simulated user misbehaved.
+    """
+    quoted = False
+    for m in messages:
+        kind = m.get("type") or "text"
+        content = m.get("content")
+        if kind == "tool_response" and isinstance(content, str):
+            with contextlib.suppress(ValueError):  # stored as serialized JSON
+                content = json.loads(content)
+        if kind == "tool_response" and isinstance(content, dict):
+            if str(content.get("name", "")).startswith("cotizar_paquete"):
+                body = _text(content.get("content"))
+                quoted = quoted or bool(re.search(r'"ok":\s*true', body))
+        elif m.get("role") == "assistant" and kind in VISIBLE and not quoted:
+            hit = AMOUNT.search(_text(content))
+            if hit:
+                return f"amount {hit[0]!r} shown before any quote"
+    return None
+
+
+def classify(evaluator_ok: bool, db_errors: list[str], problem: str | None) -> str:
+    if evaluator_ok and not db_errors:
+        return "ok"
+    return "invalid" if problem else "fail"
+
+
+def attempt(orchestrate: str, label: str, stories: dict[str, dict[str, Any]]) -> dict[str, dict]:
+    reset(stories)
+    config = render(label, stories)
+    log = BUILD / label / "evaluate.log"
+    with log.open("w") as out:
+        code = subprocess.run(
+            [orchestrate, "evaluations", "evaluate", "-c", str(config)],
+            stdout=out,
+            stderr=subprocess.STDOUT,
+            check=False,
+        ).returncode
+    if code != 0:
+        sys.exit(f"orchestrate evaluations failed ({label}); see {log.relative_to(ROOT)}")
+    evaluator, run_dir = _evaluator_results(EVAL / label)
+    db = judge(stories)
+    results = {}
+    for name in stories:
+        ok = evaluator.get(name, False)
+        messages = _messages(run_dir, name)
+        problem = simulator_problem(messages, ok and not db[name])
+        results[name] = {
+            "critical": critical_problem(messages),
+            "attempt": label,
+            "run_dir": str(run_dir.relative_to(EVAL)) if run_dir else None,
+            "evaluator": ok,
+            "db": db[name],
+            "problem": problem,
+            "status": classify(ok, db[name], problem),
+        }
+    return results
+
+
+def run(orchestrate: str, today: date, rounds: int = ROUNDS, retries: int = RETRIES) -> dict:
+    stories = load_stories(today)
+    results: dict[str, list[list[dict]]] = {name: [] for name in stories}
+    for rnd in range(1, rounds + 1):
+        pending = dict(stories)
+        for n in range(retries + 1):
+            label = f"r{rnd}a{n + 1}"
+            print(f"== round {rnd}, attempt {n + 1}: {len(pending)} story(ies)")
+            for name, res in attempt(orchestrate, label, pending).items():
+                if n == 0:
+                    results[name].append([])
+                results[name][-1].append(res)
+                print(
+                    f"   {res['status']:<8} {name}"
+                    + (f"  ({res['problem']})" if res["problem"] else "")
+                )
+            pending = {
+                k: v for k, v in pending.items() if results[k][-1][-1]["status"] == "invalid"
+            }
+            if not pending:
+                break
+    doc = {"today": today.isoformat(), "rounds": rounds, "results": results}
+    RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    RESULTS.write_text(json.dumps(doc, ensure_ascii=False, indent=2, default=str))
+    return doc
 
 
 # --------------------------------------------------------------------------- gate
 
 
-def latest_summary(run_dir: Path) -> Path | None:
-    found = sorted(run_dir.glob("*/summary_metrics.csv"))
-    return found[-1] if found else None
+def final_status(attempts: list[dict]) -> str:
+    """A round's verdict is its last attempt (earlier ones were invalid)."""
+    return attempts[-1]["status"] if attempts else "fail"
 
 
-def eval_success(summary: Path) -> dict[str, bool]:
-    with summary.open(newline="") as f:
-        return {row["dataset_name"]: row["is_success"] == "True" for row in csv.DictReader(f)}
+def gate_rows(doc: dict, stories: dict[str, dict[str, Any]]) -> tuple[list[dict], bool]:
+    rows, ok_all = [], True
+    for name, rounds in doc["results"].items():
+        holdout = bool(stories.get(name, {}).get("x_holdout"))
+        statuses = [final_status(r) for r in rounds]
+        oks = statuses.count("ok")
+        need = len(rounds) if holdout else min(TRAIN_MIN_OK, len(rounds))
+        critical = [a["critical"] for r in rounds for a in r if a.get("critical")]
+        passed = oks >= need and not critical
+        ok_all = ok_all and passed
+        rows.append(
+            {
+                "story": name,
+                "holdout": holdout,
+                "statuses": statuses,
+                "passed": passed,
+                "need": need,
+                "critical": critical,
+                "invalid_attempts": sum(a["status"] == "invalid" for r in rounds for a in r),
+                # every attempt, for the refinement report (transcripts only for training stories)
+                "runs": [
+                    {
+                        "run": a["run_dir"],
+                        "attempt": a["attempt"],
+                        "evaluator": a["evaluator"],
+                        "db": a["db"],
+                        "problem": a["problem"],
+                        "status": a["status"],
+                        "critical": a.get("critical"),
+                    }
+                    for r in rounds
+                    for a in r
+                ],
+            }
+        )
+    return rows, ok_all
 
 
-def gate_table(today: date) -> tuple[list[dict[str, Any]], bool]:
-    stories = load_stories(today)
-    runs = sorted(EVAL.glob("run*"))
-    rows, ok = [], bool(runs)
-    for name, story in stories.items():
-        row: dict[str, Any] = {"story": name, "holdout": bool(story.get("x_holdout")), "runs": []}
-        for run_dir in runs:
-            summary = latest_summary(run_dir)
-            judge_file = run_dir / "judge.json"
-            evaluator = eval_success(summary).get(name, False) if summary else False
-            db_errors = (
-                json.loads(judge_file.read_text()).get(name, ["no judge"])
-                if judge_file.exists()
-                else ["no judge"]
-            )
-            row["runs"].append({"run": run_dir.name, "evaluator": evaluator, "db": db_errors})
-            ok = ok and evaluator and not db_errors
-        rows.append(row)
-    return rows, ok
+def add_critical(doc: dict) -> None:
+    """Results saved before the critical check existed: compute it from the transcripts."""
+    for rounds in doc["results"].values():
+        for a in (a for r in rounds for a in r):
+            if "critical" not in a:
+                run_dir = EVAL / a["run_dir"] if a.get("run_dir") else None
+                a["critical"] = critical_problem(_messages(run_dir, a.get("story", "")))
+
+
+def print_gate(doc: dict, today: date) -> bool:
+    for name, rounds in doc["results"].items():
+        for a in (a for r in rounds for a in r):
+            a.setdefault("story", name)
+    add_critical(doc)
+    rows, ok = gate_rows(doc, load_stories(today))
+    (EVAL / "gate.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+    for row in rows:
+        marks = " ".join(row["statuses"])
+        tag = "holdout " if row["holdout"] else ""
+        noise = f"  ({row['invalid_attempts']} invalid retried)" if row["invalid_attempts"] else ""
+        verdict = "PASS" if row["passed"] else "FAIL"
+        print(f"  {verdict} {row['story']:<32} {tag}{marks}  need {row['need']} ok{noise}")
+        for c in row["critical"]:
+            print(f"       CRITICAL: {c}")
+    print("golden gate:", "PASS" if ok else "FAIL")
+    return ok
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["render", "reset", "judge", "gate", "cleanup"])
-    parser.add_argument("--run", type=int, default=1)
+    parser.add_argument("command", choices=["run", "gate", "cleanup"])
+    parser.add_argument("--orchestrate", default="orchestrate", help="path to the ADK CLI")
+    parser.add_argument("--rounds", type=int, default=ROUNDS)
     args = parser.parse_args()
     today = today_colombia()
-    if args.command == "render":
-        print(f"rendered stories for {today} in {render(args.run, today).relative_to(ROOT)}")
-    elif args.command == "reset":
-        deleted = asyncio.run(delete_travelers(PREFIX))
-        seeded = seed_profiles(load_stories(today))
-        print(f"deleted {deleted} golden traveler(s); seeded {seeded} profile(s)")
-    elif args.command == "cleanup":
+    if args.command == "cleanup":
         print(f"deleted {asyncio.run(delete_travelers('test+'))} test traveler(s)")
-    elif args.command == "judge":
-        result = judge(args.run, today)
-        for name, errors in result.items():
-            print(
-                f"  {'ok  ' if not errors else 'FAIL'} {name}"
-                + "".join(f"\n       - {e}" for e in errors)
-            )
+        return 0
+    if args.command == "run":
+        doc = run(args.orchestrate, today, rounds=args.rounds)
     else:
-        rows, ok = gate_table(today)
-        EVAL.mkdir(parents=True, exist_ok=True)
-        (EVAL / "gate.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
-        for row in rows:
-            marks = " ".join(
-                ("ok" if r["evaluator"] and not r["db"] else "FAIL") + f"({r['run']})"
-                for r in row["runs"]
-            )
-            print(f"  {row['story']:<34} {'holdout ' if row['holdout'] else ''}{marks}")
-        print("golden gate:", "PASS" if ok else "FAIL")
-        return 0 if ok else 1
-    return 0
+        if not RESULTS.exists():
+            sys.exit("no results yet: make wxo-eval")
+        doc = json.loads(RESULTS.read_text(encoding="utf-8"))
+    return 0 if print_gate(doc, today) else 1
 
 
 if __name__ == "__main__":
