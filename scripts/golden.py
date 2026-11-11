@@ -25,14 +25,14 @@ must be ok in all 3. A story still invalid after its retries counts as not ok.
     python scripts/golden.py gate                       # reprint the gate from results.json
     python scripts/golden.py cleanup                    # delete every test+ traveler
 
-Needs TOOLS_DATABASE_URL, TOOLS_API_URL and TOOLS_API_KEY in the environment; never
+Needs TOOLS_API_URL and TOOLS_API_KEY in the environment (all data access goes through the
+tools API's key-protected /test-support routes, so it works on any network); never
 prints them.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import contextlib
 import csv
 import json
@@ -143,39 +143,33 @@ def render(attempt: str, stories: dict[str, dict[str, Any]]) -> Path:
 # --------------------------------------------------------------------------- database
 
 
-def _db_url() -> str:
-    url = os.environ.get("TOOLS_DATABASE_URL", "")
-    if not url:
-        sys.exit("TOOLS_DATABASE_URL is not set (put it in .env)")
-    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+def _api() -> tuple[str, dict[str, str]]:
+    base = os.environ.get("TOOLS_API_URL", "").rstrip("/")
+    key = os.environ.get("TOOLS_API_KEY", "")
+    if not base or not key:
+        sys.exit("TOOLS_API_URL and TOOLS_API_KEY must be set (put them in .env)")
+    return base, {"X-API-Key": key}
 
 
-async def _connect() -> Any:
-    import asyncpg
+def _post(path: str, body: dict) -> dict:
+    """Test-support calls go through the tools API over HTTPS (works on any network)."""
+    import httpx
 
-    return await asyncpg.connect(_db_url(), statement_cache_size=0, timeout=30)
+    base, headers = _api()
+    r = httpx.post(f"{base}{path}", headers=headers, json=body, timeout=120)
+    r.raise_for_status()
+    return r.json()
 
 
-async def delete_travelers(prefix: str = "", ids: list[str] | None = None) -> int:
-    conn = await _connect()
-    try:
-        # profiles, quotes, reservations and handoffs cascade from travelers
-        if ids is not None:
-            status = await conn.execute("delete from travelers where id = any($1)", ids)
-        else:
-            status = await conn.execute("delete from travelers where id like $1", prefix + "%")
-    finally:
-        await conn.close()
-    return int(status.split()[-1])
+def delete_travelers(ids: list[str] | None = None) -> int:
+    """Delete test travelers (ids that start with test+); None = all of them."""
+    return int(_post("/test-support/reset", {"traveler_ids": ids})["deleted"])
 
 
 def seed_profiles(stories: dict[str, dict[str, Any]]) -> int:
     import httpx
 
-    base = os.environ.get("TOOLS_API_URL", "").rstrip("/")
-    key = os.environ.get("TOOLS_API_KEY", "")
-    if not base or not key:
-        sys.exit("TOOLS_API_URL and TOOLS_API_KEY must be set to seed profiles")
+    base, headers = _api()
     seeded = 0
     for story in stories.values():
         seed = story.get("x_seed", {}).get("profile")
@@ -183,7 +177,7 @@ def seed_profiles(stories: dict[str, dict[str, Any]]) -> int:
             continue
         r = httpx.put(
             f"{base}/travelers/{traveler_of(story)}/profile",
-            headers={"X-API-Key": key},
+            headers=headers,
             json={"consent_personalization": True, **seed},
             timeout=90,
         )
@@ -195,58 +189,20 @@ def seed_profiles(stories: dict[str, dict[str, Any]]) -> int:
 
 def reset(stories: dict[str, dict[str, Any]]) -> None:
     """Fresh database state for these stories' travelers (deleted, then seeded)."""
-    asyncio.run(delete_travelers(ids=[traveler_of(s) for s in stories.values()]))
+    delete_travelers([traveler_of(s) for s in stories.values()])
     seed_profiles(stories)
 
 
-async def fetch_state(travelers: list[str]) -> dict[str, dict[str, Any]]:
-    conn = await _connect()
-    try:
-        packages = {
-            str(r["id"]): dict(r)
-            for r in await conn.fetch(
-                "select id, name, duration_days, rate_per_person from packages"
-            )
-        }
-        state: dict[str, dict[str, Any]] = {}
-        for tid in travelers:
-            quotes = [
-                dict(r)
-                for r in await conn.fetch(
-                    "select id, package_id, start_date, end_date, travelers, lines, total_amount "
-                    "from quotes where traveler_id = $1",
-                    tid,
-                )
-            ]
-            for q in quotes:
-                q["package"] = packages[str(q["package_id"])]
-                if isinstance(q["lines"], str):
-                    q["lines"] = json.loads(q["lines"])
-            reservations = [
-                dict(r)
-                for r in await conn.fetch(
-                    "select quote_id, idempotency_key, status from reservations "
-                    "where traveler_id = $1",
-                    tid,
-                )
-            ]
-            profile = await conn.fetchrow(
-                "select consent_personalization, attributes, persona_prompt "
-                "from traveler_profiles where traveler_id = $1",
-                tid,
-            )
-            handoffs = await conn.fetchval(
-                "select count(*) from handoffs where traveler_id = $1", tid
-            )
-            state[tid] = {
-                "quotes": quotes,
-                "reservations": reservations,
-                "profile": dict(profile) if profile else None,
-                "handoffs": handoffs,
-            }
-        return state
-    finally:
-        await conn.close()
+def fetch_state(travelers: list[str]) -> dict[str, dict[str, Any]]:
+    doc = _post("/test-support/state", {"traveler_ids": travelers})
+    packages = {p["id"]: p for p in doc["packages"]}
+    state = doc["travelers"]
+    for st in state.values():
+        for q in st["quotes"]:
+            q["package"] = packages[q["package_id"]]
+            q["start_date"] = date.fromisoformat(q["start_date"])
+            q["end_date"] = date.fromisoformat(q["end_date"])
+    return state
 
 
 # --------------------------------------------------------------------------- judge
@@ -317,7 +273,7 @@ def judge_story(expect: dict[str, Any], st: dict[str, Any]) -> list[str]:
 
 def judge(stories: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
     travelers = {name: traveler_of(s) for name, s in stories.items()}
-    state = asyncio.run(fetch_state(list(travelers.values())))
+    state = fetch_state(list(travelers.values()))
     return {
         name: judge_story(s.get("x_db", {}), state[travelers[name]]) for name, s in stories.items()
     }
@@ -585,7 +541,7 @@ def main() -> int:
     args = parser.parse_args()
     today = today_colombia()
     if args.command == "cleanup":
-        print(f"deleted {asyncio.run(delete_travelers('test+'))} test traveler(s)")
+        print(f"deleted {delete_travelers(None)} test traveler(s)")
         return 0
     if args.command == "run":
         doc = run(args.orchestrate, today, rounds=args.rounds)

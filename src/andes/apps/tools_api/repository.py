@@ -82,11 +82,23 @@ class Repository(Protocol):
         """Erase the stored profile (consent denied or withdrawn); creates nothing."""
         ...
 
+    # test support: only travelers whose id starts with TEST_PREFIX
+    async def delete_test_travelers(self, ids: list[str] | None) -> int: ...
+
+    async def test_state(self, ids: list[str]) -> dict[str, dict]: ...
+
     async def quoted_amounts(self, since: datetime) -> set[int]:
         """Totals, line and unit amounts of every quote that expires after `since`."""
         ...
 
     async def close(self) -> None: ...
+
+
+TEST_PREFIX = "test+"
+
+
+def _test_ids(ids: list[str]) -> list[str]:
+    return [i for i in ids if i.startswith(TEST_PREFIX)]
 
 
 def catalog_packages() -> list[Package]:
@@ -126,6 +138,62 @@ class MemoryRepository:
 
     async def delete_profile(self, traveler_id: str) -> None:
         self.profiles.pop(traveler_id, None)
+
+    async def delete_test_travelers(self, ids: list[str] | None) -> int:
+        known = (
+            set(self.profiles)
+            | {q.traveler_id for q in self.quotes.values()}
+            | {h["traveler_id"] for h in self.handoffs if h["traveler_id"]}
+        )
+        doomed = {t for t in known if t.startswith(TEST_PREFIX)}
+        if ids is not None:
+            doomed &= set(_test_ids(ids))
+        for t in doomed:
+            self.profiles.pop(t, None)
+        self.reservations = {
+            k: r for k, r in self.reservations.items() if r.traveler_id not in doomed
+        }
+        self.quotes = {k: q for k, q in self.quotes.items() if q.traveler_id not in doomed}
+        self.handoffs = [h for h in self.handoffs if h["traveler_id"] not in doomed]
+        return len(doomed)
+
+    async def test_state(self, ids: list[str]) -> dict[str, dict]:
+        out = {}
+        for tid in _test_ids(ids):
+            p = self.profiles.get(tid)
+            out[tid] = {
+                "quotes": [
+                    {
+                        "id": q.quote_id,
+                        "package_id": q.package.id,
+                        "start_date": q.start_date.isoformat(),
+                        "end_date": q.end_date.isoformat(),
+                        "travelers": q.travelers,
+                        "lines": q.lines,
+                        "total_amount": q.total_amount,
+                    }
+                    for q in self.quotes.values()
+                    if q.traveler_id == tid
+                ],
+                "reservations": [
+                    {
+                        "quote_id": r.quote_id,
+                        "idempotency_key": r.idempotency_key,
+                        "status": r.status,
+                    }
+                    for r in self.reservations.values()
+                    if r.traveler_id == tid
+                ],
+                "profile": None
+                if p is None
+                else {
+                    "consent_personalization": p.consent_personalization,
+                    "attributes": p.attributes,
+                    "persona_prompt": p.persona_prompt,
+                },
+                "handoffs": sum(1 for h in self.handoffs if h["traveler_id"] == tid),
+            }
+        return out
 
     async def recent_reservations(self, traveler_id: str, limit: int = 3) -> list[dict]:
         out = []
@@ -475,6 +543,86 @@ class PostgresRepository:
             currency=row.currency,
             commission_amount=int(row.commission_amount),
         )
+
+    async def delete_test_travelers(self, ids: list[str] | None) -> int:
+        # profiles, quotes, reservations and handoffs cascade from travelers
+        async with self.engine.begin() as conn:
+            if ids is None:
+                result = await conn.execute(
+                    text("delete from travelers where id like :p"), {"p": TEST_PREFIX + "%"}
+                )
+            else:
+                result = await conn.execute(
+                    text("delete from travelers where id = any(:ids)"), {"ids": _test_ids(ids)}
+                )
+        return int(result.rowcount or 0)
+
+    async def test_state(self, ids: list[str]) -> dict[str, dict]:
+        out: dict[str, dict] = {}
+        async with self.engine.connect() as conn:
+            for tid in _test_ids(ids):
+                quotes = [
+                    {
+                        "id": str(r.id),
+                        "package_id": str(r.package_id),
+                        "start_date": r.start_date.isoformat(),
+                        "end_date": r.end_date.isoformat(),
+                        "travelers": r.travelers,
+                        "lines": r.lines if isinstance(r.lines, list) else json.loads(r.lines),
+                        "total_amount": int(r.total_amount),
+                    }
+                    for r in await conn.execute(
+                        text(
+                            "select id, package_id, start_date, end_date, travelers, lines, "
+                            "total_amount from quotes where traveler_id = :tid"
+                        ),
+                        {"tid": tid},
+                    )
+                ]
+                reservations = [
+                    {
+                        "quote_id": str(r.quote_id),
+                        "idempotency_key": r.idempotency_key,
+                        "status": r.status,
+                    }
+                    for r in await conn.execute(
+                        text(
+                            "select quote_id, idempotency_key, status from reservations "
+                            "where traveler_id = :tid"
+                        ),
+                        {"tid": tid},
+                    )
+                ]
+                prof = (
+                    await conn.execute(
+                        text(
+                            "select consent_personalization, attributes, persona_prompt "
+                            "from traveler_profiles where traveler_id = :tid"
+                        ),
+                        {"tid": tid},
+                    )
+                ).first()
+                handoffs = (
+                    await conn.execute(
+                        text("select count(*) from handoffs where traveler_id = :tid"),
+                        {"tid": tid},
+                    )
+                ).scalar_one()
+                out[tid] = {
+                    "quotes": quotes,
+                    "reservations": reservations,
+                    "profile": None
+                    if prof is None
+                    else {
+                        "consent_personalization": prof.consent_personalization,
+                        "attributes": prof.attributes
+                        if isinstance(prof.attributes, dict)
+                        else json.loads(prof.attributes),
+                        "persona_prompt": prof.persona_prompt,
+                    },
+                    "handoffs": int(handoffs),
+                }
+        return out
 
     async def delete_profile(self, traveler_id: str) -> None:
         async with self.engine.begin() as conn:

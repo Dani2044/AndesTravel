@@ -47,6 +47,7 @@ from andes.apps.tools_api.schemas import (
     QuoteOut,
     ReservationIn,
     ReservationOut,
+    TestTravelersIn,
     TravelerContext,
 )
 
@@ -395,6 +396,28 @@ def create_app(
             total=Money(amount=reservation.total_amount, currency=reservation.currency),
             deduplicated=not created,
         )
+
+    # ----------------------------------------------------------------- test support
+    # Used by scripts/golden.py so the golden stories can reset and judge their own test
+    # travelers over HTTPS (no direct database access needed). Only ids that start with
+    # "test+" are touched; not part of the OpenAPI spec, so no agent ever sees them.
+
+    @app.post("/test-support/reset", include_in_schema=False, dependencies=auth)
+    async def test_reset(body: TestTravelersIn, repo: Repo) -> dict:
+        return {"deleted": await repo.delete_test_travelers(body.traveler_ids)}
+
+    @app.post("/test-support/state", include_in_schema=False, dependencies=auth)
+    async def test_state(body: TestTravelersIn, repo: Repo) -> dict:
+        packages = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "duration_days": p.duration_days,
+                "rate_per_person": p.rate_per_person,
+            }
+            for p in await repo.list_packages()
+        ]
+        return {"packages": packages, "travelers": await repo.test_state(body.traveler_ids or [])}
 
     # ----------------------------------------------------------------- plug-ins
 

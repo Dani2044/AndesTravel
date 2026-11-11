@@ -305,3 +305,31 @@ def test_openapi_operation_ids_are_tool_names(client: TestClient) -> None:
         "create_reservation",
         "price_guard",
     }
+
+
+def test_test_support_touches_only_test_travelers(client: TestClient) -> None:
+    _quote(client, traveler="test+golden-99@andes.test")
+    _quote(client, traveler="ana@example.com")
+    state = client.post(
+        "/test-support/state",
+        json={"traveler_ids": ["test+golden-99@andes.test", "ana@example.com"]},
+        headers=H,
+    ).json()
+    assert set(state["travelers"]) == {"test+golden-99@andes.test"}  # real travelers hidden
+    q = state["travelers"]["test+golden-99@andes.test"]["quotes"][0]
+    assert q["start_date"] == "2026-12-10" and len(state["packages"]) == 8
+    out = client.post(
+        "/test-support/reset", json={"traveler_ids": ["ana@example.com"]}, headers=H
+    ).json()
+    assert out == {"deleted": 0}
+    assert client.post("/test-support/reset", json={"traveler_ids": None}, headers=H).json() == {
+        "deleted": 1
+    }
+    repo = client.app.state.repo
+    assert {q.traveler_id for q in repo.quotes.values()} == {"ana@example.com"}
+
+
+def test_test_support_needs_key_and_is_not_a_tool(client: TestClient) -> None:
+    assert client.post("/test-support/reset", json={}).status_code == 401
+    paths = client.get("/openapi.json").json()["paths"]
+    assert not [p for p in paths if p.startswith("/test-support")]

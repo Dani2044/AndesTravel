@@ -162,3 +162,27 @@ async def test_one_booking_per_quote_even_with_other_keys(client: httpx.AsyncCli
     first, second = out
     assert first["ok"] and second["reservation_id"] == first["reservation_id"]
     assert second["deduplicated"] is True
+
+
+async def test_test_support_on_postgres(client: httpx.AsyncClient) -> None:
+    await _quote(client, "test+pg-support@andes.test")
+    await _quote(client, "real@example.com")
+    state = (
+        await client.post(
+            "/test-support/state",
+            json={"traveler_ids": ["test+pg-support@andes.test", "real@example.com"]},
+            headers=H,
+        )
+    ).json()
+    assert list(state["travelers"]) == ["test+pg-support@andes.test"]
+    assert state["travelers"]["test+pg-support@andes.test"]["quotes"][0]["travelers"] == 3
+    out = (
+        await client.post(
+            "/test-support/reset",
+            json={"traveler_ids": ["test+pg-support@andes.test", "real@example.com"]},
+            headers=H,
+        )
+    ).json()
+    assert out == {"deleted": 1}
+    ctx = (await client.get("/travelers/real@example.com/context", headers=H)).json()
+    assert ctx["ok"]

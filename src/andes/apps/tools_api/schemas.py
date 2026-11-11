@@ -198,3 +198,9 @@ class PluginIn(BaseModel):
 class PluginOut(BaseModel):
     continue_processing: bool = True
     modified_payload: dict | None = None
+
+
+class TestTravelersIn(BaseModel):
+    """Test support: ids must start with "test+"; others are ignored. None = every test id."""
+
+    traveler_ids: list[str] | None = None
