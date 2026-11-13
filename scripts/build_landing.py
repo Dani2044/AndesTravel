@@ -54,7 +54,7 @@ def destination_cards() -> str:
     cards = []
     for p in seed.CATALOG:  # no prices: the exact price only comes from a quote
         cards.append(
-            '<div class="card">'
+            '<div class="tile">'
             f'<div class="dest">{html.escape(p["destination"])}</div>'
             f'<div class="pkg">{html.escape(p["name"])}</div>'
             f'<div class="days">{p["duration_days"]} días</div>'

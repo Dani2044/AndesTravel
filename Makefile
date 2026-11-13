@@ -132,7 +132,7 @@ PROMPTFOO := PROMPTFOO_DISABLE_TELEMETRY=1 PROMPTFOO_DISABLE_UPDATE=1 \
 
 .PHONY: wxo-eval
 wxo-eval: wxo-login api-warm ## Golden stories: 3 rounds vs draft; runs the simulated user broke are retried (pass 2/3, holdout 3/3)
-	$(GOLDEN) run --orchestrate $(ORCH) --rounds $(EVAL_ROUNDS)
+	$(GOLDEN) run --orchestrate $(ORCH) --rounds $(EVAL_ROUNDS) $(if $(ONLY),--only $(ONLY))
 
 .PHONY: test-adversarial
 test-adversarial: api-warm ## Adversarial suite (promptfoo) vs the draft supervisor, with category thresholds

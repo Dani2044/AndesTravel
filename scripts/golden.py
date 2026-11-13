@@ -432,8 +432,16 @@ def attempt(orchestrate: str, label: str, stories: dict[str, dict[str, Any]]) ->
     return results
 
 
-def run(orchestrate: str, today: date, rounds: int = ROUNDS, retries: int = RETRIES) -> dict:
+def run(
+    orchestrate: str,
+    today: date,
+    rounds: int = ROUNDS,
+    retries: int = RETRIES,
+    only: list[str] | None = None,
+) -> dict:
     stories = load_stories(today)
+    if only:
+        stories = {k: v for k, v in stories.items() if any(k.startswith(o) for o in only)}
     results: dict[str, list[list[dict]]] = {name: [] for name in stories}
     for rnd in range(1, rounds + 1):
         pending = dict(stories)
@@ -538,13 +546,14 @@ def main() -> int:
     parser.add_argument("command", choices=["run", "gate", "cleanup"])
     parser.add_argument("--orchestrate", default="orchestrate", help="path to the ADK CLI")
     parser.add_argument("--rounds", type=int, default=ROUNDS)
+    parser.add_argument("--only", nargs="*", help="story name prefixes, e.g. g04 g08")
     args = parser.parse_args()
     today = today_colombia()
     if args.command == "cleanup":
         print(f"deleted {delete_travelers(None)} test traveler(s)")
         return 0
     if args.command == "run":
-        doc = run(args.orchestrate, today, rounds=args.rounds)
+        doc = run(args.orchestrate, today, rounds=args.rounds, only=args.only)
     else:
         if not RESULTS.exists():
             sys.exit("no results yet: make wxo-eval")

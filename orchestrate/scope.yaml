@@ -6,7 +6,7 @@ channels: [web]
 
 # Tools in the instance (named by the console) and the only agents that may use them.
 tools:
-  Contexto_del_viajero_7585Oc: [Untitled_Agent_1_5717pu]
+  Contexto_del_viajero_7585Oc: [Untitled_Agent_1_5717pu, Untitled_Agent_1_4902je]
   Escalar_a_un_asesor_humano_8273cD: [Untitled_Agent_1_5717pu]
   Guardar_perfil_del_viajero_7968Lu: [Untitled_Agent_1_4902je]
   Consultar_disponibilidad_8879L3: [Untitled_Agent_1_4480sA]

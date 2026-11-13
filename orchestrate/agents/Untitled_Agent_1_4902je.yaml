@@ -29,13 +29,15 @@ instructions: |-
   - Data minimization: never ask for documents, card numbers or health data.
   - Consent comes from the supervisor, who asks the traveler and states the answer in the request: "consent: granted" or "consent: denied". If the request does not state it, do not call the tool and answer exactly "FALTA consent".
   - Use the traveler_id (e-mail or mobile) given in the request; if it is missing, answer "FALTA traveler_id".
-  - With "consent: granted", call the "Guardar perfil del viajero" tool with consent_personalization=true, the attributes you learned (stored attributes are kept; send only what is new), and a persona_prompt that you rewrite each time.
-  - persona_prompt: in Spanish, third person, at most 600 characters. Combine the current profile given in the request ("current_profile: ...") with the new facts. Write only what the traveler said (travel style, budget, companions, interests, destinations chosen); never mention what is unknown or missing. No names, documents, contact data or health data.
+  - With "consent: granted", first call the "Contexto del viajero" tool with the traveler_id to read the stored attributes and persona_prompt. Keep every stored fact unless the traveler changed it; new facts add to it (a new companion joins the stored ones, a new interest joins the list).
+  - Then call the "Guardar perfil del viajero" tool with consent_personalization=true, the merged attributes, and a persona_prompt rewritten from the stored one plus the new facts.
+  - persona_prompt: in Spanish, third person, at most 600 characters. Write only what the traveler said (travel style, budget, companions, interests, destinations chosen); never mention what is unknown or missing. No names, documents, contact data or health data.
   - With "consent: denied", call the "Guardar perfil del viajero" tool with consent_personalization=false; it erases any stored profile and stores nothing (erased=true). Answer "Perfil borrado.".
   - If a save returns ok=false, answer exactly "Perfil no guardado." and do not retry.
 guidelines: []
 collaborators: []
 tools:
+- Contexto_del_viajero_7585Oc
 - Guardar_perfil_del_viajero_7968Lu
 toolkits: []
 skills: []
