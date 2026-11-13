@@ -6,7 +6,8 @@ Settings > Embed Security). GET /webchat/token signs one per visitor with the pr
 key in WEBCHAT_PRIVATE_KEY (a Render environment variable, never in git).
 
 The visitor is anonymous: `sub` is a random id the page keeps in sessionStorage. Tokens
-last one hour (Orchestrate accepts at most 7,100 seconds).
+last ~1 h 56 min (Orchestrate accepts at most 7,100 seconds); a longer visit reloads
+the page.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from datetime import datetime, timedelta
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-TOKEN_TTL = timedelta(hours=1)
+TOKEN_TTL = timedelta(seconds=7000)  # Orchestrate accepts at most 7,100 s
 _USER_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 

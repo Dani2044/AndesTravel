@@ -63,6 +63,15 @@ def destination_cards() -> str:
     return "\n      ".join(cards)
 
 
+def instance_url() -> str:
+    """The instance API URL (orchestrate/environment.yaml), e.g. .../instances/<id>."""
+    text = (ROOT / "orchestrate" / "environment.yaml").read_text(encoding="utf-8")
+    match = re.search(r"^url:\s*(\S+)", text, re.M)
+    if not match:
+        raise ValueError("url not found in orchestrate/environment.yaml")
+    return match[1]
+
+
 def render(template: str, values: dict[str, str]) -> str:
     out = template
     for name, value in values.items():
@@ -98,6 +107,7 @@ def main() -> int:
     values = {
         **embed_values(snippet),
         "TOKEN_URL": f"{api}/webchat/token",
+        "INSTANCE_URL": instance_url(),
         "DESTINATIONS": destination_cards(),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)

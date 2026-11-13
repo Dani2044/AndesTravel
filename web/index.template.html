@@ -110,6 +110,8 @@
     const config = {
       orchestrationID: "{{ORCHESTRATION_ID}}",
       hostURL: "{{HOST_URL}}",
+      // The instance API is on another host than the chat assets: name it explicitly.
+      instanceUrl: "{{INSTANCE_URL}}",
       rootElementID: "chat",
       showLauncher: false,
       crn: "{{CRN}}",
@@ -119,14 +121,6 @@
         agentId: "{{AGENT_ID}}",
         agentEnvironmentId: "{{AGENT_ENV_ID}}"
       },
-      onLoad: function (instance) {
-        // Tokens last one hour: hand the chat a fresh one whenever it asks.
-        instance.on({ type: "authTokenNeeded", handler: async function (event) {
-          event.authToken = await fetchToken();
-        } });
-        if (instance.changeView) instance.changeView("mainWindow");
-        status.textContent = "Escríbele aquí: por ejemplo, «quiero ir a la playa en diciembre».";
-      }
     };
 
     async function start() {
@@ -138,7 +132,10 @@
       }
       const script = document.createElement("script");
       script.src = config.hostURL + "/wxochat/wxoLoader.js?embed=true";
-      script.addEventListener("load", function () { wxoLoader.init(config); });
+      script.addEventListener("load", function () {
+        wxoLoader.init(config);
+        status.textContent = "Escríbele aquí: por ejemplo, «quiero ir a la playa en diciembre».";
+      });
       script.addEventListener("error", function () {
         status.textContent = "No pudimos cargar el chat. Recarga la página en un momento.";
       });

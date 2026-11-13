@@ -40,7 +40,7 @@ def test_token_is_rs256_and_short_lived() -> None:
     header, claims = _decode(webchat.visitor_token("abc123", KEY, NOW))
     assert header == {"alg": "RS256", "typ": "JWT"}
     assert claims["sub"] == "abc123"
-    assert claims["exp"] - claims["iat"] == 3600 <= 7100
+    assert claims["exp"] - claims["iat"] == 7000 <= 7100
 
 
 def test_odd_user_ids_get_a_fresh_one() -> None:
