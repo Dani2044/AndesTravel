@@ -6,6 +6,11 @@ reads them from `orchestrate channels webchat embed` and writes the page to buil
 (gitignored), which `make landing-deploy` publishes to Cloudflare Pages.
 
     uv run --env-file .env python scripts/build_landing.py --orchestrate <path to CLI>
+    python scripts/build_landing.py --from-env    # Render static site build (no CLI there)
+
+With --from-env the ids come from environment variables (set on the Render static site,
+never in git): WXO_ORCHESTRATION_ID, WXO_HOST_URL, WXO_CRN, WXO_AGENT_ID,
+WXO_AGENT_ENV_ID, plus TOOLS_API_URL. Standard library only, so any Python 3 builds it.
 """
 
 from __future__ import annotations
@@ -82,16 +87,47 @@ def render(template: str, values: dict[str, str]) -> str:
     return out
 
 
+ENV_FIELDS = {
+    "ORCHESTRATION_ID": "WXO_ORCHESTRATION_ID",
+    "HOST_URL": "WXO_HOST_URL",
+    "CRN": "WXO_CRN",
+    "AGENT_ID": "WXO_AGENT_ID",
+    "AGENT_ENV_ID": "WXO_AGENT_ENV_ID",
+}
+
+
+def env_values() -> dict[str, str]:
+    missing = [env for env in ENV_FIELDS.values() if not os.environ.get(env)]
+    if missing:
+        sys.exit(f"missing environment variables: {', '.join(missing)}")
+    return {name: os.environ[env] for name, env in ENV_FIELDS.items()}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--orchestrate", default="orchestrate")
+    parser.add_argument("--from-env", action="store_true", help="ids from WXO_* variables")
     args = parser.parse_args()
     api = os.environ.get("TOOLS_API_URL", "").rstrip("/")
     if not api.startswith("https://"):
         sys.exit("TOOLS_API_URL must be the https URL of the tools API (put it in .env)")
-    snippet = subprocess.run(
+    ids = env_values() if args.from_env else embed_values(cli_snippet(args.orchestrate))
+    values = {
+        **ids,
+        "TOKEN_URL": f"{api}/webchat/token",
+        "INSTANCE_URL": os.environ.get("WXO_INSTANCE_URL") or instance_url(),
+        "DESTINATIONS": destination_cards(),
+    }
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(render(TEMPLATE.read_text(encoding="utf-8"), values), encoding="utf-8")
+    print(f"wrote {OUT.relative_to(ROOT)}")
+    return 0
+
+
+def cli_snippet(orchestrate: str) -> str:
+    return subprocess.run(
         [
-            args.orchestrate,
+            orchestrate,
             "channels",
             "webchat",
             "embed",
@@ -104,16 +140,6 @@ def main() -> int:
         text=True,
         check=True,
     ).stdout
-    values = {
-        **embed_values(snippet),
-        "TOKEN_URL": f"{api}/webchat/token",
-        "INSTANCE_URL": instance_url(),
-        "DESTINATIONS": destination_cards(),
-    }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(render(TEMPLATE.read_text(encoding="utf-8"), values), encoding="utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)}")
-    return 0
 
 
 if __name__ == "__main__":
