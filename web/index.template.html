@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Andes Travel</title>
+  <style>
+    :root {
+      --ink: #1d2a2f; --muted: #5b6b70; --paper: #f7f4ee; --card: #ffffff;
+      --accent: #0f6b5c; --accent-ink: #ffffff; --line: #e3ddd2;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+           color: var(--ink); background: var(--paper); }
+    header { padding: 56px 16px 40px; text-align: center;
+             background: linear-gradient(180deg, #e6efe9 0%, var(--paper) 100%); }
+    .brand { font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+             color: var(--accent); font-size: 14px; }
+    h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; margin: 12px auto; max-width: 720px; }
+    .lead { color: var(--muted); max-width: 620px; margin: 0 auto 24px; }
+    .cta { display: inline-block; background: var(--accent); color: var(--accent-ink);
+           padding: 12px 22px; border-radius: 999px; border: 0; font-size: 16px; cursor: pointer; }
+    .layout { max-width: 1200px; margin: 0 auto; padding: 8px 16px 48px; display: grid; gap: 24px;
+              grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: start; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    .panel { position: sticky; top: 16px; background: var(--card); border: 1px solid var(--line);
+             border-radius: 16px; overflow: hidden; height: min(680px, calc(100vh - 32px));
+             display: flex; flex-direction: column; }
+    .panel-head { padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 650; }
+    .panel-head small { display: block; font-weight: 400; color: var(--muted); }
+    #chat { flex: 1; min-height: 0; position: relative; }
+    h2 { font-size: 22px; margin: 32px 0 12px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .card .dest { font-weight: 650; }
+    .card .pkg { color: var(--muted); font-size: 14px; }
+    .card .days { margin-top: 8px; font-size: 13px; color: var(--accent); }
+    ol.steps { padding-left: 20px; color: var(--muted); }
+    footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 16px 96px;
+             border-top: 1px solid var(--line); }
+    .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Andes Travel</div>
+    <h1>Arma tu viaje por Colombia conversando</h1>
+    <p class="lead">Cuéntale a nuestro asistente qué te gusta, con quién viajas y cuándo.
+      Te recomienda un paquete, te cotiza al instante y reserva por ti.</p>
+  </header>
+
+  <div class="layout">
+  <main>
+    <h2>Nuestros destinos</h2>
+    <div class="grid">
+      {{DESTINATIONS}}
+    </div>
+
+    <h2>Cómo funciona</h2>
+    <ol class="steps">
+      <li>Compártele tu correo o celular para que te reconozca la próxima vez.</li>
+      <li>Si quieres, autoriza guardar tus preferencias para recomendaciones personalizadas.</li>
+      <li>Pide una cotización: el precio exacto sale siempre de una cotización, válida por 60 minutos.</li>
+      <li>Confirma la reserva cuando estés listo, o pide hablar con un asesor.</li>
+    </ol>
+  </main>
+
+  <aside class="panel" aria-label="Asistente de Andes Travel">
+    <div class="panel-head">Asistente de viajes
+      <small id="chat-status" role="status">Preparando el asistente…</small></div>
+    <div id="chat"></div>
+  </aside>
+  </div>
+
+  <footer>
+    Demostración (PoC) sobre IBM watsonx Orchestrate. Las reservas son de prueba y no se cobra nada.
+  </footer>
+
+  <script>
+    // Anonymous visitor id for this browser tab; the tools API signs it into a short JWT.
+    function visitorId() {
+      try {
+        let id = sessionStorage.getItem("andes_visitor");
+        if (!id) {
+          id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).replace(/[^A-Za-z0-9]/g, "");
+          sessionStorage.setItem("andes_visitor", id);
+        }
+        return id;
+      } catch (e) {
+        return String(Date.now());
+      }
+    }
+
+    const status = document.getElementById("chat-status");
+
+    async function fetchToken() {
+      // The tools API may be waking up (free hosting sleeps when idle): allow ~1 minute.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 70000);
+      try {
+        const r = await fetch("{{TOKEN_URL}}?user_id=" + encodeURIComponent(visitorId()), { signal: ctrl.signal });
+        if (!r.ok) throw new Error("token " + r.status);
+        return (await r.text()).trim();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    const config = {
+      orchestrationID: "{{ORCHESTRATION_ID}}",
+      hostURL: "{{HOST_URL}}",
+      rootElementID: "chat",
+      showLauncher: false,
+      crn: "{{CRN}}",
+      deploymentPlatform: "ibmcloud",
+      layout: { form: "custom", customElement: document.getElementById("chat") },
+      chatOptions: {
+        agentId: "{{AGENT_ID}}",
+        agentEnvironmentId: "{{AGENT_ENV_ID}}"
+      },
+      onLoad: function (instance) {
+        // Tokens last one hour: hand the chat a fresh one whenever it asks.
+        instance.on({ type: "authTokenNeeded", handler: async function (event) {
+          event.authToken = await fetchToken();
+        } });
+        if (instance.changeView) instance.changeView("mainWindow");
+        status.textContent = "Escríbele aquí: por ejemplo, «quiero ir a la playa en diciembre».";
+      }
+    };
+
+    async function start() {
+      try {
+        config.token = await fetchToken();
+      } catch (e) {
+        status.textContent = "No pudimos iniciar el asistente. Recarga la página en un momento.";
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = config.hostURL + "/wxochat/wxoLoader.js?embed=true";
+      script.addEventListener("load", function () { wxoLoader.init(config); });
+      script.addEventListener("error", function () {
+        status.textContent = "No pudimos cargar el chat. Recarga la página en un momento.";
+      });
+      document.head.appendChild(script);
+    }
+
+    start();
+  </script>
+</body>
+</html>

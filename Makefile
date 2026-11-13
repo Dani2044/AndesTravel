@@ -198,6 +198,23 @@ api-warm: ## Wake the deployed tools API (Render free sleeps when idle) and wait
 		echo "waking up... ($$i)"; sleep 5; \
 	done; echo "API did not answer in 2 minutes"; exit 1
 
+.PHONY: api-keepalive
+api-keepalive: api-warm ## During a demo: ping the tools API every 10 min so Render never sleeps (Ctrl-C to stop)
+	@set -a; . ./.env; set +a; \
+	while true; do sleep 600; curl -fsS --max-time 30 "$$TOOLS_API_URL/health" >/dev/null \
+		&& echo "$$(date +%H:%M) awake" || echo "$$(date +%H:%M) no answer"; done
+
+# --- Landing page with the embedded chat (Cloudflare Pages project andes-travel-poc) ---
+WRANGLER := npx --yes wrangler@4.154.0
+
+.PHONY: landing-build
+landing-build: wxo-login ## Build build/web/index.html (live supervisor ids from the CLI; not committed)
+	$(PY) --env-file .env python scripts/build_landing.py --orchestrate $(ORCH)
+
+.PHONY: landing-deploy
+landing-deploy: landing-build ## Publish build/web to Cloudflare Pages (first time: npx wrangler login)
+	$(WRANGLER) pages deploy build/web --project-name andes-travel-poc --branch main --commit-dirty=true
+
 # --- Alternative: IBM Code Engine (needs Code Engine access in the IBM account) ---
 # Cost caps, applied on every create/update. Worst case with these values is ONE
 # instance of 0.25 vCPU / 0.5 GB running the whole month (~USD 23 of compute).
