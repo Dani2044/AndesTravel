@@ -63,12 +63,8 @@ def test_route_needs_no_api_key_and_allows_only_the_landing_origin() -> None:
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == "https://andes-travel-poc.pages.dev"
     assert _decode(r.text)[1]["sub"] == "u1"
-    render = c.get("/webchat/token", headers={"Origin": "https://andes-travel-poc.onrender.com"})
-    assert render.headers["access-control-allow-origin"] == "https://andes-travel-poc.onrender.com"
-    lookalike = c.get(
-        "/webchat/token", headers={"Origin": "https://andes-travel-poc.onrender.com.evil.io"}
-    )
-    assert "access-control-allow-origin" not in lookalike.headers
+    onrender = c.get("/webchat/token", headers={"Origin": "https://andes-travel-poc.onrender.com"})
+    assert "access-control-allow-origin" not in onrender.headers
     other = c.get("/webchat/token", headers={"Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in other.headers
 

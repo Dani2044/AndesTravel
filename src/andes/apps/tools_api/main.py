@@ -89,14 +89,9 @@ def _pkg(p: logic.Package) -> PackageInfo:
     return PackageInfo(**p.summary())
 
 
-# Only the landing page (Cloudflare Pages project andes-travel-poc and its previews, or
-# the Render static site andes-travel-poc[-suffix]) and a local preview may call the
-# browser-facing routes.
-WEBCHAT_ORIGINS = (
-    r"^https://([a-z0-9-]+\.)?andes-travel-poc\.pages\.dev$"
-    r"|^https://andes-travel-poc(-[a-z0-9]+)?\.onrender\.com$"
-    r"|^http://localhost(:\d+)?$"
-)
+# Only the landing page (Cloudflare Pages project andes-travel-poc, its previews) and a
+# local preview may call the browser-facing routes.
+WEBCHAT_ORIGINS = r"^https://([a-z0-9-]+\.)?andes-travel-poc\.pages\.dev$|^http://localhost(:\d+)?$"
 
 
 def create_app(

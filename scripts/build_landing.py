@@ -6,10 +6,9 @@ reads them from `orchestrate channels webchat embed` and writes the page to buil
 (gitignored), which `make landing-deploy` publishes to Cloudflare Pages.
 
     uv run --env-file .env python scripts/build_landing.py --orchestrate <path to CLI>
-    python scripts/build_landing.py --from-env    # Render static site build (no CLI there)
+    python scripts/build_landing.py --from-env    # where the CLI is not available
 
-With --from-env the ids come from environment variables (set on the Render static site,
-never in git): WXO_ORCHESTRATION_ID, WXO_HOST_URL, WXO_CRN, WXO_AGENT_ID,
+With --from-env the ids come from environment variables (never in git): WXO_ORCHESTRATION_ID, WXO_HOST_URL, WXO_CRN, WXO_AGENT_ID,
 WXO_AGENT_ENV_ID, plus TOOLS_API_URL. Standard library only, so any Python 3 builds it.
 """
 

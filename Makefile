@@ -204,19 +204,8 @@ api-keepalive: api-warm ## During a demo: ping the tools API every 10 min so Ren
 	while true; do sleep 600; curl -fsS --max-time 30 "$$TOOLS_API_URL/health" >/dev/null \
 		&& echo "$$(date +%H:%M) awake" || echo "$$(date +%H:%M) no answer"; done
 
-# --- Landing page with the embedded chat ---
-# Main host: Render static site andes-travel-poc (free, never sleeps), built on Render
-# with `python3 scripts/build_landing.py --from-env` (ids in its env vars, not in git).
-# Backup: Cloudflare Pages project andes-travel-poc (landing-deploy).
-RENDER_STATIC ?= srv-dbrk5sbrjlhs73bhbtvg
+# --- Landing page with the embedded chat (Cloudflare Pages project andes-travel-poc) ---
 WRANGLER := npx --yes wrangler@4.154.0
-
-.PHONY: landing-redeploy
-landing-redeploy: ## Rebuild the landing on Render from the pushed HEAD (push first)
-	@git fetch -q origin && git branch -r --contains HEAD | grep -q . \
-		|| { echo "HEAD is not pushed yet: git push first"; exit 1; }
-	@set -a; . ./.env; set +a; \
-	render deploys create $(RENDER_STATIC) --commit $$(git rev-parse HEAD) --wait --confirm -o text
 
 .PHONY: landing-build
 landing-build: wxo-login ## Build build/web/index.html (live supervisor ids from the CLI; not committed)
