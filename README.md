@@ -15,6 +15,12 @@ PostgreSQL + pgvector, and open-source observability. External providers (WhatsA
 telephony, payments) are wrapped by adapters with working mocks, so the entire test suite
 runs offline. The current implementation stands at **v4.73**.
 
+> **PoC on IBM watsonx Orchestrate (Nov 2026):** the current proof of concept moves the
+> orchestration to watsonx Orchestrate (supervisor + four specialists, OpenAPI tools on a
+> FastAPI service, Supabase, a web landing with the embedded chat). See
+> [`docs/poc.md`](docs/poc.md). The LangGraph implementation described below is kept as
+> the legacy reference and does not take part in the PoC.
+
 ---
 
 ## Highlights
@@ -100,6 +106,8 @@ Environment variables are documented in [`.env.example`](.env.example).
 | [`docs/integration.md`](docs/integration.md) | Production integration checklist |
 | [`docs/runbook.md`](docs/runbook.md) | Operations |
 | [`docs/test-plan.md`](docs/test-plan.md) | Test strategy and gates |
+| [`docs/poc.md`](docs/poc.md) | PoC on watsonx Orchestrate: architecture, quality, costs, demo |
+| [`orchestrate/README.md`](orchestrate/README.md) | Versioned Orchestrate resources and quality gates |
 
 ## License
 
