@@ -4,6 +4,7 @@ Run locally (in-memory storage):  make api-run
 Environment:
     TOOLS_API_KEY        required header value for X-API-Key (all routes but /health)
     TOOLS_DATABASE_URL   Supabase Postgres URL; unset = in-memory storage
+    WEBCHAT_PRIVATE_KEY  PEM RSA key that signs the landing page's chat tokens (optional)
 """
 
 from __future__ import annotations
@@ -19,9 +20,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-from andes.apps.tools_api import logic, price_guard
+from andes.apps.tools_api import logic, price_guard, webchat
 from andes.apps.tools_api.logic import DomainError
 from andes.apps.tools_api.repository import (
     MemoryRepository,
@@ -86,10 +89,16 @@ def _pkg(p: logic.Package) -> PackageInfo:
     return PackageInfo(**p.summary())
 
 
+# Only the landing page (Cloudflare Pages project andes-travel-poc, its previews) and a
+# local preview may call the browser-facing routes.
+WEBCHAT_ORIGINS = r"^https://([a-z0-9-]+\.)?andes-travel-poc\.pages\.dev$|^http://localhost(:\d+)?$"
+
+
 def create_app(
     repo: Repository | None = None,
     api_key: str | None = None,
     clock: Clock = _utcnow,
+    webchat_key: str | None = None,
 ) -> FastAPI:
     if repo is None:
         url = os.environ.get("TOOLS_DATABASE_URL")
@@ -111,6 +120,11 @@ def create_app(
     )
     app.state.repo = repo
     app.state.clock = clock
+    pem = webchat_key if webchat_key is not None else os.environ.get("WEBCHAT_PRIVATE_KEY", "")
+    signing_key = webchat.load_private_key(pem.replace("\\n", "\n")) if pem else None
+    app.add_middleware(
+        CORSMiddleware, allow_origin_regex=WEBCHAT_ORIGINS, allow_methods=["GET"], max_age=3600
+    )
 
     def require_key(key: Annotated[str | None, Depends(_api_key_header)]) -> None:
         if not api_key:
@@ -396,6 +410,15 @@ def create_app(
             total=Money(amount=reservation.total_amount, currency=reservation.currency),
             deduplicated=not created,
         )
+
+    # ----------------------------------------------------------------- webchat
+
+    @app.get("/webchat/token", include_in_schema=False, response_class=PlainTextResponse)
+    async def webchat_token(at: Now, user_id: str | None = None) -> str:
+        """JWT for the embedded chat (no API key: the browser calls it). See webchat.py."""
+        if signing_key is None:
+            raise HTTPException(status_code=503, detail="webchat is not configured")
+        return webchat.visitor_token(user_id, signing_key, at)
 
     # ----------------------------------------------------------------- test support
     # Used by scripts/golden.py so the golden stories can reset and judge their own test

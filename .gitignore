@@ -41,3 +41,6 @@ supabase/.temp/
 *.sqlite3
 data/
 models/
+
+# webchat JWT signing keys (private key lives in Render env, never in git)
+.keys/
