@@ -475,7 +475,8 @@ def create_app(
         missing = price_guard.unbacked(body.payload, quoted)
         if not missing:
             return PluginOut()
-        log.warning("price_guard: replaced an answer with %d unquoted amount(s)", len(missing))
+        # amounts only (no conversation text), to tell invented prices from false positives
+        log.warning("price_guard: replaced an answer; unquoted amounts %s", sorted(missing))
         return PluginOut(modified_payload=price_guard.replace_answer(body.payload))
 
     return app
